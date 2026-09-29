@@ -212,9 +212,16 @@ the tier below.
 `scripts/dispatch` reads those two rows, so keep the cell form. The Codex column is the equal-tier
 executor a human selects, and the disclosed re-dispatch (When it is not there) when Claude is
 missing, erroring or out of quota. Arbitration — a genuine dilemma, an irreversible judgment, an
-architecture-level acceptance — takes Codex `gpt-6-astra` at `max`, read-only from this session
-through the Codex reviewer path:
-`review-packet start --implementation codex --model gpt-6-astra --effort max`.
+architecture-level acceptance — takes Codex `gpt-6-astra` at `max`, read-only from this session. It
+informs the decision and does not make it: a genuine dilemma or irreversible judgment still goes to
+the human (the stuck-work ladder below). With a PR, commission it through the Codex reviewer path:
+`review-packet start --implementation codex --model gpt-6-astra --effort max`. Before a PR exists,
+run a fresh, history-free Codex process from the checkout with the question and its evidence on
+stdin, and post the captured answer on the issue as the durable record:
+
+```sh
+codex exec --ephemeral -s read-only -m gpt-6-astra -c model_reasoning_effort='"max"' -o <session-scratch>/answer.md - < <session-scratch>/question.md
+```
 
 A helper — a one-off subagent any role spawns for its own task — is neither anchored role and never
 goes through `scripts/dispatch` or `scripts/review-packet`. It always uses its own harness's

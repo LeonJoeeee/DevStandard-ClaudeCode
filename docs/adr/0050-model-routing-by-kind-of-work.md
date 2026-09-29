@@ -127,9 +127,13 @@ longer used. Both harnesses hit quota at times, so the routing keeps both in use
 reviewer stay anchored on Claude `opus` at `high`; their Codex cell becomes `gpt-6-astra` at `high`,
 replacing the 2026-09-23 block's `gpt-6-sol` at `high`, as the equal-tier executor a human selects and
 the disclosed re-dispatch when Claude cannot run. Arbitration is Codex `gpt-6-astra` at `max`, run
-read-only from the Claude main session through the existing Codex reviewer path (`review-packet
-start --implementation codex --model gpt-6-astra --effort max`); the pinned Codex CLI accepts that
-setting, and Claude `fable` is named nowhere live. A one-off subagent — a helper — always uses its
+read-only from the Claude main session; it informs a genuine dilemma or irreversible judgment, which
+stays the human's. With a PR it goes through the existing Codex reviewer path (`review-packet start
+--implementation codex --model gpt-6-astra --effort max`); before a PR exists it is a fresh,
+ephemeral, read-only `codex exec` with the question and evidence on stdin, its captured answer
+posted on the issue, and no script is added. The pinned Codex CLI accepts that setting, CI asserts
+that the two routes name the same one and that the direct one stays read-only, and Claude `fable`
+is named nowhere live. A one-off subagent — a helper — always uses its
 own harness's built-in subagent, never the other harness, and takes its model from its work: one
 whose conclusion directly decides a merge or a design takes `opus` or `gpt-6-astra` at `high`,
 ordinary judgment `sonnet` or `gpt-6-sol` at `high`, mechanical work `sonnet` or `gpt-6-luna` at

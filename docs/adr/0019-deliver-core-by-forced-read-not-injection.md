@@ -1,6 +1,6 @@
 # 0019 — Deliver core.md by hook-forced first-action read, not full-text injection
 
-Status: Accepted (2026-07-24). Amended by 0045 (2026-09-05). Amends 0007 (delivery mechanism only; the one-page shape and the token ceiling are unchanged). Amended (2026-07-24). Amended by 0038 (2026-08-26). Amended by 0039 (2026-08-26). Amended by 0049 (2026-09-07). Amended (2026-09-07). Amended by 0056 (2026-09-11).
+Status: Accepted (2026-07-24). Amended by 0045 (2026-09-05). Amends 0007 (delivery mechanism only; the one-page shape and the token ceiling are unchanged). Amended (2026-07-24). Amended by 0038 (2026-08-26). Amended by 0039 (2026-08-26). Amended by 0049 (2026-09-07). Amended (2026-09-07). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -67,3 +67,8 @@ Both hosts receive the shared role artifacts under 0049's per-artifact inline ru
 stays `startup|clear|compact`; only the Codex adapter adds resume, instructing reads of missing
 shared sources. Hookless recovery is an explicit source-reading skill, not automatic delivery or
 hook trust.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes the Codex SessionStart branch, with its cap,
+handler set, adapter resume trigger and hookless-recovery skill. Only the Claude hook delivers the
+role artifact, on `startup|clear|compact`; a Codex environment gets the unsupported-environment
+warning.

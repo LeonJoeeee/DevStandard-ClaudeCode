@@ -1,6 +1,6 @@
 # 0011 — Two ordered merge gates: clean-context diff review, then green CI
 
-Status: Accepted (2026-07-02). Amended by 0045 (2026-09-05). Amended by 0025 (2026-08-02). Amended by 0035 (2026-08-22). Amended by 0040 (2026-08-26). Amended by 0044 (2026-09-02). Amended by 0046 (2026-09-05). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11).
+Status: Accepted (2026-07-02). Amended by 0045 (2026-09-05). Amended by 0025 (2026-08-02). Amended by 0035 (2026-08-22). Amended by 0040 (2026-08-26). Amended by 0044 (2026-09-02). Amended by 0046 (2026-09-05). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -92,3 +92,10 @@ exclusion of that topology is retired. Their gating reviewers use the existing f
 process path; an unavailable qualified reviewer still blocks the gate. The two checks are unchanged;
 the version-line exemptions now cover all three synchronized release manifests under the same
 byte/mode and ordering checks (`reference/hard-edges.md`).
+
+**Amendment (2026-09-29, see 0063):** 0063 removes Codex main sessions again, so the 0045 block's
+exclusion of that topology applies again; a Codex gating reviewer is the fresh read-only CLI process
+a Claude Code orchestrator dispatches. The version-line exemptions cover the two Claude manifests,
+`.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, under the same byte/mode and
+ordering checks; `reference/orchestrator.md`'s Merge and rebase proof section carries the operative
+wording.

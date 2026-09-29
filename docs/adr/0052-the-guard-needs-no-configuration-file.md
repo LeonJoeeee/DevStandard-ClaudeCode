@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-09-10). Amends 0046 (authorization record, founding admission) and 0051 (the
 policy read). Amended by 0056 (2026-09-11). Amended (2026-09-13). Amended (2026-09-20). Amended by
-0062 (2026-09-20).
+0062 (2026-09-20). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -138,3 +138,8 @@ deletion and recursive `rm`, and the orchestrator's local `git merge`; the disci
 is the role's page rather than a refusal, exactly as that sentence already says for the
 orchestrator's three. `.github/test-hard-edges.py` keeps the sweep unchanged in mechanism, with the
 retired words moved from its refusal table to a table of the benign work each one used to refuse.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes native Codex workers. The per-role OS sandbox
+applies to the Codex CLI; Claude-native and Claude CLI workers retain host/tool permissions and
+their assigned-worktree duty. The guard still has no configuration file;
+`reference/orchestrator.md`'s Dispatching to an executor section owns the implementation boundaries.

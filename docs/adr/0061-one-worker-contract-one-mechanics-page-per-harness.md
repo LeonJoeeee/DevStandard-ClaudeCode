@@ -1,6 +1,6 @@
 # 0061 — One worker contract, one mechanics page per harness
 
-Status: Accepted (2026-09-19). Amends 0056 (shared role sources) and 0060 (the definition body).
+Status: Accepted (2026-09-19). Amends 0056 (shared role sources) and 0060 (the definition body). Amended by 0063 (2026-09-29).
 
 **Scope: this ADR decides what the method ships.** It splits the worker role into a shared contract
 and one mechanics page per executor family (#409); `reference/worker.md`,
@@ -78,3 +78,10 @@ tell a deliberate cut from a lost sentence. This change moves sentences; it remo
 
 Rollback concatenates the two pages back into `reference/worker.md` and restores the single-source
 generator, through a reviewed revert.
+
+**Amendment (2026-09-29, see 0063):** 0063 strips the host-facing content from
+`reference/harness-codex.md`: it now maps the Codex CLI executor for the dispatching Claude Code
+session and keeps the marked worker section, which dispatch appends for `--implementation codex`
+alone. There is no `codex-native` path and no Codex session-start delivery of the page;
+`.github/test-codex-native.py` is deleted, and `.github/test-codex-runtime.py` still proves the
+contract and the Codex section reach the child. The one-contract, one-mechanics-page split stands.

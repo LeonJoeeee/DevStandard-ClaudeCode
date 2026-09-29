@@ -1,6 +1,6 @@
 # 0018 — A repo-root CLAUDE.md joins the doc set: operational memory for clean-context workers
 
-Status: Accepted (2026-07-16). Amended by 0045 (2026-09-05). Amended (2026-07-25). Amended by 0030. Amended (2026-08-13). Amended (2026-08-25). Amended by 0037 (2026-08-25). Amended by 0038 (2026-08-26). Amended by 0039 (2026-08-26). Amended by 0041 (2026-08-28). Amended by 0042 (2026-08-31). Amended (2026-09-07). Amended by 0056 (2026-09-11).
+Status: Accepted (2026-07-16). Amended by 0045 (2026-09-05). Amended (2026-07-25). Amended by 0030. Amended (2026-08-13). Amended (2026-08-25). Amended by 0037 (2026-08-25). Amended by 0038 (2026-08-26). Amended by 0039 (2026-08-26). Amended by 0041 (2026-08-28). Amended by 0042 (2026-08-31). Amended (2026-09-07). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -113,3 +113,8 @@ block is installed in `AGENTS.md` or `AGENTS.override.md`.
 `CLAUDE.md`, explicitly alongside existing `AGENTS.md` instructions. No operational facts move, and
 no managed delivery block is installed in either AGENTS file. The content fence, conditional
 creation and write-back lane remain; `reference/repo-claude-md.md` owns this memory rule.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes Codex main sessions. `CLAUDE.md` stays the
+operational-memory file: the Claude Code orchestrator and every dispatched worker read it, a Codex
+worker explicitly, alongside a project's existing `AGENTS.md`. No managed block is installed in
+either file; `reference/repo-claude-md.md` owns the rule.

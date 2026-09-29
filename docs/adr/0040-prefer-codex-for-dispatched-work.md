@@ -12,7 +12,7 @@ by dating and single-siting the setting, not by refusing to write it. Amends 003
 reviewer — with the read-only Codex run as its executor where installed), 0038 (its Claude-side
 "defaults to Codex" sentence becomes the harness-neutral rung-2 rule) and 0034 (its "moves into a
 subagent" trigger reads as any out-of-context helper, a process included). Cites 0008 (the
-ladder's rungs are unchanged). Amended by 0056 (2026-09-11).
+ladder's rungs are unchanged). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 *This ADR changes what DevStandard ships — a routing preference and a standing setting on the pages
 every seeded project reads — so a reader in a seeded project should take it as method.*
@@ -134,3 +134,10 @@ uses its own native workers; Codex hosts pass `--implementation codex-native` fo
 separate choice. The dispatcher default stays `claude`; the caller passes its host binding.
 `reference/external-agent.md` owns routing, with the dated Codex model/effort setting applied to both
 native and CLI implementations.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes `--implementation codex-native` and the per-host
+bindings. Dispatch defaults to the Claude-native subagent; `--implementation codex` is the
+human-selected CLI executor for workers and read-only gating review, and the Codex model/effort
+setting applies to that path alone. `reference/orchestrator.md`'s Dispatching to an executor section
+owns routing; `reference/harness-codex.md` maps the CLI executor, not a Codex session dispatching
+within its own harness.

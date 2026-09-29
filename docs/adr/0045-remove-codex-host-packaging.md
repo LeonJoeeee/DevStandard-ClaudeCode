@@ -2,7 +2,7 @@
 
 Status: Superseded by 0056 (2026-09-11). Originally Accepted (2026-09-05). Supersedes 0038 and 0039. Amends 0006, 0007, 0008, 0011,
 0015, 0016, 0018, 0019, 0024, 0036, and 0040 (their live Codex host, delivery, and routing statements).
-Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended (2026-09-12).
+Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended (2026-09-12). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -78,3 +78,8 @@ two-Claude-manifest exemptions remain unchanged.
 **Amendment (2026-09-12, see PR):** The final sentence of the 2026-09-11 block is stale. Since PR
 #343, the guard's version proofs cover all three synchronized manifests: the two Claude manifests
 and the Codex manifest.
+
+**Amendment (2026-09-29, see 0063):** 0063 supersedes 0056 and removes Codex hosting again, deciding
+the removal anew rather than reviving this ADR: its body and its blocks stay history. The guard's
+version proofs cover the two Claude manifests, so the 2026-09-12 block's three-manifest sentence no
+longer holds.

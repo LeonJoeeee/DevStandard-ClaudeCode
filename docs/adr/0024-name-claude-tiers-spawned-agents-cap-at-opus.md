@@ -1,6 +1,6 @@
 # 0024 — DevStandard names Claude's model tiers; a spawned agent never runs above `opus`
 
-Status: Accepted (2026-07-25). Amended by 0045 (2026-09-05). Amended by 0028. Amended by 0039 (2026-08-26). Amended by 0040 (2026-08-26). Amends 0008 (its model-routing bullet only; the ladder, run sizing and rationing stand). Amended (2026-09-07). Amended by 0050 (2026-09-09). Amended by 0056 (2026-09-11).
+Status: Accepted (2026-07-25). Amended by 0045 (2026-09-05). Amended by 0028. Amended by 0039 (2026-08-26). Amended by 0040 (2026-08-26). Amends 0008 (its model-routing bullet only; the ladder, run sizing and rationing stand). Amended (2026-09-07). Amended by 0050 (2026-09-09). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -55,3 +55,8 @@ the shipped roles retain `opus` as their default and add explicit high effort.
 0056. The current model/effort rules remain on `reference/external-agent.md` under 0050, with
 explicit host-specific settings. The restored adapter points there; no Claude tier names or retired
 tier cap are imposed on Codex.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes Codex-main routing and the adapter again. The
+Codex CLI executor's model and effort come from `reference/orchestrator.md`'s Model and effort
+section, which dispatch reads; `reference/harness-codex.md` now maps only the CLI executor. No
+Claude tier names are imposed on Codex.

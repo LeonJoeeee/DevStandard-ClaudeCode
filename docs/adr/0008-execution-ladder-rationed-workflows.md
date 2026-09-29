@@ -1,6 +1,6 @@
 # 0008 — Execution ladder: pick the cheapest rung; workflows are rationed
 
-Status: Amended by 0050 (2026-09-09). Superseded by 0047 (2026-09-07). Amended by 0047 (2026-09-07). Originally Accepted (2026-06-11). Amended by 0045 (2026-09-05). Supersedes 0003. Amended by 0017 (2026-07-16), 0024 (2026-07-25). Amended by 0039 (2026-08-26). Amended by 0056 (2026-09-11).
+Status: Amended by 0050 (2026-09-09). Superseded by 0047 (2026-09-07). Amended by 0047 (2026-09-07). Originally Accepted (2026-06-11). Amended by 0045 (2026-09-05). Supersedes 0003. Amended by 0017 (2026-07-16), 0024 (2026-07-25). Amended by 0039 (2026-08-26). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -52,3 +52,8 @@ records them.
 0056. This ADR remains superseded by 0047; restoring the host does not restore the execution ladder.
 The current model/effort rule remains on `reference/external-agent.md`; Codex hosts use native
 workers and independent read-only CLI gating reviewers.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes Codex hosts and native Codex workers again; Codex
+takes part as a dispatched CLI worker or read-only reviewer. The model/effort rule is
+`reference/orchestrator.md`'s Model and effort section — the page the 0056 block names no longer
+exists. This ADR remains superseded by 0047.

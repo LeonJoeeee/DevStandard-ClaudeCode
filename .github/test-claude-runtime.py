@@ -51,26 +51,22 @@ def delivered_contexts(selector='orchestrator'):
     A role page larger than one hook output is delivered across its declared handler calls
     (ADR 0059), so what the session must receive whole is every part, and these are the
     delivery's own bytes — header and body — rather than a restatement of the file.
-
-    Only this host's declared handlers: since #415 hooks.json declares a set per host, because
-    Codex's configurable limit carries a whole artifact in one part and Claude's fixed
-    persistence boundary does not. What THIS host is owed is the Claude set.
     """
     groups = json.loads((ROOT / 'hooks/hooks.json').read_text())['hooks']['SessionStart']
     calls = []
     for group in groups:
         for handler in group['hooks']:
             args = handler['command'].split('"')[-1].split()
-            if len(args) == 4 and args[0] == selector and args[3] == 'claude':
+            if len(args) == 3 and args[0] == selector:
                 calls.append((int(args[1]), int(args[2])))
-    require(calls, 'no declared Claude-host SessionStart handler for ' + selector)
+    require(calls, 'no declared SessionStart handler for ' + selector)
     env = {key: value for key, value in os.environ.items()
            if key not in ('PLUGIN_DATA', 'CLAUDE_PLUGIN_DATA', 'DEVSTANDARD_ROLE')}
     env['CLAUDE_PLUGIN_DATA'] = 'devstandard-claude-runtime'
     parts = []
     for index, total in sorted(calls):
         result = subprocess.run([str(ROOT / 'hooks/session-start'), selector,
-                                 str(index), str(total), 'claude'],
+                                 str(index), str(total)],
                                 input='{"source":"startup"}', capture_output=True, text=True,
                                 cwd='/tmp', env=env, timeout=120, check=True)
         context = json.loads(result.stdout).get('hookSpecificOutput', {}).get('additionalContext', '')
@@ -103,8 +99,7 @@ def reconstruct_from_request(host_text, contexts, artifact):
     Measured on Claude Code 2.1.270 (issue #396): the declared handlers run concurrently and
     the host appends each context as its process finishes, and repeated runs of the same shipped
     three-part page produced all six orders of its parts. That is why the order is returned
-    rather than asserted. `.github/test-codex-runtime.py` carries the same
-    helper for the Codex host; the two are one idea and change together.
+    rather than asserted.
     """
     assembled = ''
     arrival = []
@@ -143,7 +138,7 @@ def role_page_carrier(host_text, role, case, log_dir):
     """What carries a dispatched Claude worker its role pages: `agents/<role>.md`'s own body.
 
     `scripts/dispatch` reads `reference/worker.md` into the brief only where no definition can
-    carry it — `codex` and `codex-native`. Both Claude paths send the task packet alone: the
+    carry it — `codex`. Both Claude paths send the task packet alone: the
     DEFAULT `--implementation claude` since #332, and `--implementation claude-cli` since #411,
     which ran `--agent devstandard:worker` and prepended the page as well until then. Until #402
     the definition carried no role text either, only the source path and an IN FULL read
@@ -374,8 +369,6 @@ def runtime(binary, fixture_dir, log_dir, role):
              'byte_identical_to_file': assembled.encode() == page,
              # The host's, not ours: recorded so a change in it is visible, never asserted on.
              'prompt_arrival_order': arrival}, indent=2) + '\n')
-        require('DevStandard operating context: reference/harness-codex.md' not in request_text,
-                'Codex adapter leaked into Claude')
     else:
         require('DevStandard operating context: reference/orchestrator.md' not in request_text,
                 'direct CLI worker/reviewer inherited orchestrator context')

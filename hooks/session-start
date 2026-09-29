@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# SessionStart hook for the DevStandard plugin — shared Claude Code / Codex delivery.
+# SessionStart hook for the DevStandard plugin — Claude Code delivery.
 #
 # One page per role (ADR 0059). Each artifact has its own hook output; an artifact the host can
 # carry whole is delivered in ONE of them, and one too large for that is emitted across as many
 # ordered handler calls as it needs, whose parts concatenate, in part order, to the file's exact
-# bytes. Size is no longer a design constraint on a role page. Which of the two applies is the
-# HOST's answer, not ours: the cap below is per host, and hooks/hooks.json declares a handler set
-# per host to match (#415). Measurement history: docs/specs/2026-09-06-core-md-rule-ledger.md.
-# startup|clear|compact repeats delivery when context was lost, not on resume — but what each
-# source can deliver differs: on Claude, compaction carries a short role-neutral notice rather
-# than the orchestrator page (see the source branch).
+# bytes. Size is no longer a design constraint on a role page. Measurement history:
+# docs/specs/2026-09-06-core-md-rule-ledger.md.
+# startup|clear|compact repeats delivery when context was lost, not on resume — but compaction
+# carries a short role-neutral notice rather than the orchestrator page (see the source branch).
+#
+# Claude Code is the only host (#459, ADR 0063). Codex hosted the method from ADR 0056 until
+# then, with its own cap, handler set and adapter page here; a Codex environment is now an
+# unsupported one and gets the visible warning at the bottom, once. Codex remains a dispatched
+# CLI executor: `scripts/dispatch` installs only the fixed role hook, and should a pre-2.0 Codex
+# install of this hook still run there, the executor's DEVSTANDARD_ROLE silences it below.
 #
 # Escaping approach adapted from superpowers' session-start (MIT, Jesse Vincent).
 
@@ -17,66 +21,40 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-# The caps below bound ONE delivered part, in BYTES, one per host: a part's complete context never
-# exceeds the cap of the host it is delivered on, and a page above that cap is split across handler
-# calls rather than dropped. Raising either past its host's own limit damages the page exactly where
-# the page cannot show it, so neither number may be raised without measuring that host again.
-# Human ruling, 2026-09-20 (issue #415) — 一次性能送达，就一次性: where the host's limit admits the
-# whole page, it is not split, and the per-part preamble is paid once.
+# CLAUDE_CAP_BYTES bounds ONE delivered part, in BYTES: a part's complete context never exceeds
+# it, and a page above it is split across handler calls rather than dropped. Raising it past the
+# host's own limit damages the page exactly where the page cannot show it, so it may not be raised
+# without measuring the host again. Human ruling, 2026-09-20 (issue #415) — 一次性能送达，就一次性:
+# where the host's limit admits the whole page, it is not split, and the per-part preamble is
+# paid once.
 #
-# CLAUDE_CAP_BYTES — Claude Code persists a SessionStart `additionalContext` whose stored JSON
-# reaches about 10,000 characters to a file and injects a 2KB preview and that path in its place.
-# Measured on Claude Code 2.1.270 (issue #396): a part of 9,341 bytes arrived whole and one of
-# 9,660 bytes was persisted. Our markdown escapes to roughly 6% above its byte count in that store,
-# so this cap keeps a part about 2,000 characters clear of that boundary. That boundary is the
-# host's own file-persistence threshold and is not configurable, so this host keeps the split —
-# which is why only its part 1 pays the full preamble.
+# Claude Code persists a SessionStart `additionalContext` whose stored JSON reaches about 10,000
+# characters to a file and injects a 2KB preview and that path in its place. Measured on Claude
+# Code 2.1.270 (issue #396): a part of 9,341 bytes arrived whole and one of 9,660 bytes was
+# persisted. Our markdown escapes to roughly 6% above its byte count in that store, so this cap
+# keeps a part about 2,000 characters clear of that boundary. That boundary is the host's own
+# file-persistence threshold and is not configurable, so this host keeps the split — which is why
+# only part 1 pays the full preamble.
 #
-# CODEX_CAP_BYTES — Codex's limit is `additionalContextLimit`, in TOKENS, per SessionStart handler
-# in hooks/hooks.json; left unset the host keeps the head and the tail of the context and drops its
-# MIDDLE at 2500 tokens, with no degraded mode and nothing in the page to show for it — measured on
-# Codex CLI 0.153.4 (issue #389). That key IS configurable, and its ceiling was measured on the same
-# CLI (issue #415): one part of 28,000, then 40,000, then 64,000 bytes each arrived byte-identical
-# with the key set to its own byte count, and nothing clamped it. 40,000 is the chosen number — it
-# admits every shipped artifact in one part with room to grow, and 64,000 was measured whole above
-# it, so the cap has headroom against the HOST and not only against our pages. hooks.json sets that
-# key to this same number on every Codex-host handler: a token is never shorter than one byte, so a
-# token limit equal to the byte cap cannot cut a part the byte cap already admits, however the part
-# tokenizes. So move that key with this one.
-#
-# One handler set serving BOTH hosts with this limit raised — Codex speaking on the first handler
-# and the rest silent — was proposed on PR #417 and declined (human ruling, 2026-09-20, issue
-# #415): it would retire this host's separate declaration and the one no-op handler spawn that
-# costs a session, at the price of making per-host delivery an implicit consequence of these two
-# numbers instead of something each handler declares by naming its host.
-#
-# `.github/test-codex-plugin.py` fails when a Codex-host SessionStart handler carries less than
-# CODEX_CAP_BYTES; `.github/test-codex-runtime.py`'s cap cases prove on the real Codex host that a
-# part at exactly that number arrives whole with the key and loses its middle without it, and that
-# every shipped artifact arrives in one part; `.github/test-claude-runtime.py` proves the
-# orchestrator page arrives whole, part by part, from the real Claude host — the check that catches
-# CLAUDE_CAP_BYTES being too large.
+# `.github/test-claude-runtime.py` proves the orchestrator page arrives whole, part by part, from
+# the real Claude host — the check that catches CLAUDE_CAP_BYTES being too large.
 CLAUDE_CAP_BYTES=8000
-CODEX_CAP_BYTES=40000
 
 case "${1-orchestrator}" in
     orchestrator) artifact="reference/orchestrator.md" ;;
-    codex) artifact="reference/harness-codex.md" ;;
     *) printf '%s\n' 'Unknown DevStandard context artifact' >&2; exit 1 ;;
 esac
-# `<artifact> [part] [declared parts] [host]`: which handler call this is, how many hooks.json
-# declares for the artifact ON THAT HOST, and which host the declaration serves. A page needing
-# more parts than are declared would lose its tail silently, so that case degrades to an instructed
-# read instead — the visible failure mode `.github/check-core-budget.py` fails on.
+# `<artifact> [part] [declared parts]`: which handler call this is, and how many hooks.json
+# declares for the artifact. A page needing more parts than are declared would lose its tail
+# silently, so that case degrades to an instructed read instead — the visible failure mode
+# `.github/check-core-budget.py` fails on.
+if [ "$#" -gt 3 ]; then
+    printf '%s\n' 'DevStandard context takes an artifact, a part and a part count' >&2; exit 1
+fi
 part_index="${2-1}"
 part_total="${3-$part_index}"
-declared_host="${4-any}"
 case "${part_index}${part_total}" in
     ''|*[!0-9]*) printf '%s\n' 'DevStandard context part must be a number' >&2; exit 1 ;;
-esac
-case "$declared_host" in
-    any|claude|codex) ;;
-    *) printf '%s\n' 'DevStandard context host must be claude or codex' >&2; exit 1 ;;
 esac
 if [ "$part_index" -lt 1 ] || [ "$part_total" -lt "$part_index" ]; then
     printf '%s\n' 'DevStandard context part is outside the declared range' >&2; exit 1
@@ -111,35 +89,21 @@ first_part_only() {
     fi
 }
 
-# Codex sets PLUGIN_DATA and may also set equal-valued Claude compatibility aliases.
-# Preserve Claude with an unrelated inherited PLUGIN_DATA.
+# Recognize the Claude environment, including an unrelated inherited PLUGIN_DATA. A Codex host
+# sets PLUGIN_DATA, alone or with an equal-valued Claude compatibility alias; it no longer hosts
+# the method (#459), so that environment falls through to the unsupported-environment warning.
 pd="${PLUGIN_DATA-}"
 cpd="${CLAUDE_PLUGIN_DATA-}"
 harness=unknown
-if [ -n "$pd" ] && { [ -z "$cpd" ] || [ "$pd" = "$cpd" ]; }; then
-    harness=codex
-elif [ -n "$cpd" ]; then
+if [ -n "$cpd" ] && { [ -z "$pd" ] || [ "$pd" != "$cpd" ]; }; then
     harness=claude
 fi
 
-# Process executors receive their complete role from the dispatcher, never the host role.
-if [ "$harness" != unknown ]; then
-    case "${DEVSTANDARD_ROLE-}" in
-        worker|reviewer) printf '{}\n'; exit 0 ;;
-    esac
-    # A handler declared for the OTHER host delivers nothing here. The two hosts admit different
-    # part counts, so hooks.json declares a set per host; running both sets would deliver the page
-    # twice and, on Claude, emit a second compaction notice. An unnamed host runs on either, which
-    # is what a direct invocation (a test, a done-check) does.
-    if [ "$declared_host" != any ] && [ "$declared_host" != "$harness" ]; then
-        printf '{}\n'
-        exit 0
-    fi
-fi
-if [ "$harness" = claude ] && [ "${1-orchestrator}" = codex ]; then
-    printf '{}\n'
-    exit 0
-fi
+# Process executors receive their complete role from the dispatcher, never the host role — in
+# any environment the hook runs in, a supported one or not.
+case "${DEVSTANDARD_ROLE-}" in
+    worker|reviewer) printf '{}\n'; exit 0 ;;
+esac
 
 if [ "$harness" != unknown ]; then
     # ---------- Measured per-artifact delivery ----------
@@ -163,8 +127,7 @@ if [ "$harness" != unknown ]; then
     # Agent child is given SubagentStart at spawn, so it never reaches this delivery there —
     # but its compaction does, with no role named at all; that source is handled below.
     # Parse only the top-level field; a nested example must not select the role.
-    if [ "$harness" = claude ]; then
-        assigned_role="$(printf '%s' "$stdin_json" | python3 -c '
+    assigned_role="$(printf '%s' "$stdin_json" | python3 -c '
 import json, sys
 try:
     event = json.load(sys.stdin)
@@ -174,22 +137,15 @@ role = event.get("agent_type") if isinstance(event, dict) else None
 if isinstance(role, str) and role in ("devstandard:worker", "devstandard:reviewer", "worker", "reviewer"):
     print(role)
 ' )"
-        if [ -n "$assigned_role" ]; then
-            printf '{}\n'
-            exit 0
-        fi
+    if [ -n "$assigned_role" ]; then
+        printf '{}\n'
+        exit 0
     fi
 
     # Every measurement from here on is in bytes, and every pattern below is ASCII: the C
-    # locale makes `${#string}` count bytes, which is the unit both caps are stated in.
+    # locale makes `${#string}` count bytes, which is the unit the cap is stated in.
     LC_ALL=C
-
-    # One part's boundary is the host's, so the split is the host's too.
-    if [ "$harness" = codex ]; then
-        cap=$CODEX_CAP_BYTES
-    else
-        cap=$CLAUDE_CAP_BYTES
-    fi
+    cap=$CLAUDE_CAP_BYTES
 
     # Extract .source with pure sed — no jq dependency; empty when absent or on bad input.
     # The capture is restricted to [A-Za-z]: the field is a lowercase enum (startup|resume|
@@ -204,11 +160,9 @@ if isinstance(role, str) and role in ("devstandard:worker", "devstandard:reviewe
     # prove it is a root orchestrator session, and the orchestrator's role page is not delivered
     # on it. It once carried the shared page that asked an orchestrator to read its own; with one
     # page per role there is no shared page, so the notice below carries that ask instead — and
-    # says who must not act on it. Codex is untouched: its native children get SubagentStart
-    # instead of this hook, and its CLI children carry the DEVSTANDARD_ROLE suppressed above.
-    repeat_note="after clear or compaction"
-    if [ "$harness" = claude ] && [ "$artifact" = "reference/orchestrator.md" ]; then
-        repeat_note="after clear; on compaction a short notice asks for this page instead"
+    # says who must not act on it.
+    repeat_note="after clear; on compaction a short notice asks for this page instead"
+    if [ "$artifact" = "reference/orchestrator.md" ]; then
         if [ "$src" = compact ]; then
             first_part_only
             emit_json "DevStandard hook fired — compaction notice, ${artifact} not delivered. (source: compact)" \
@@ -248,13 +202,12 @@ Complete artifact below: follow it before acting or replying. Resolve references
     # The handler calls are ordered; their ARRIVAL is not. Measured on Claude Code 2.1.270
     # (issue #396): it runs the declared handlers concurrently and appends each context as its
     # process finishes, and repeated runs of the same shipped 3-part page have put it in the
-    # prompt in all six orders of its parts. Codex CLI 0.153.4 has so far been observed only in
-    # part order; neither host promises one. Nothing here can order a host's prompt, and nothing may
-    # block a session to try. So the part NUMBER carries the order and every part header states it;
-    # part 1's preamble says outright that the parts may appear in any order rather than implying
-    # they arrive in theirs, and states that once for the whole delivery (#415). Both runtime tests
-    # reassemble by part number, from the host's own request, and compare the result to the file's
-    # bytes; neither asserts an arrival order.
+    # prompt in all six orders of its parts; the host promises none. Nothing here can order a
+    # host's prompt, and nothing may block a session to try. So the part NUMBER carries the order
+    # and every part header states it; part 1's preamble says outright that the parts may appear
+    # in any order rather than implying they arrive in theirs, and states that once for the whole
+    # delivery (#415). The runtime test reassembles by part number, from the host's own request,
+    # and compares the result to the file's bytes; it asserts no arrival order.
     build_part_head() {
         # $1 = this part's number, $2 = the number of parts. Part 1 carries the full preamble —
         # the plugin root, the concatenation rule, the trigger rule and the repeat note. Every
@@ -342,8 +295,9 @@ Read ${PLUGIN_ROOT}/${artifact} IN FULL before acting on the request, before a s
     exit 0
 fi
 
-# ---------- Unknown harness: warn visibly, deliver nothing, never block ----------
+# ---------- Unknown harness: warn visibly, once, deliver nothing, never block ----------
+first_part_only
 emit_json \
     "devstandard hook: unknown harness (unsupported hook environment) — no method delivered." \
-    "The DevStandard hook could not identify its harness (PLUGIN_DATA and CLAUDE_PLUGIN_DATA are absent or empty). Report this to the user: the DevStandard plugin needs requalification for this environment; no method instructions were delivered."
+    "The DevStandard hook could not identify its harness (CLAUDE_PLUGIN_DATA is absent or the environment is unsupported). DevStandard runs its main session on Claude Code only. Report this to the user: the DevStandard plugin needs requalification for this environment; no method instructions were delivered."
 exit 0

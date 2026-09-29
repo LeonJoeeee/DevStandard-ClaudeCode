@@ -1,6 +1,6 @@
 # 0059 — Each role page is self-contained; there is no shared core page
 
-Status: Accepted (2026-09-14). Amended by 0060 (2026-09-15). Amended (2026-09-20).
+Status: Accepted (2026-09-14). Amended by 0060 (2026-09-15). Amended (2026-09-20). Amended by 0063 (2026-09-29).
 
 **Scope: this ADR decides what the method ships.** `reference/orchestrator.md` and
 `reference/worker.md` each carry the whole contract their role needs; this record carries the
@@ -123,3 +123,9 @@ still splits. `hooks/hooks.json` declares a handler set per host to match, and w
 kept rather than one set serving both hosts is recorded beside `CODEX_CAP_BYTES`. Each cap is still
 measured, and the rest of this ADR is untouched: delivery still does not cap a page, and how large
 one output may be is still the host's answer rather than ours.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes the Codex host. `hooks/session-start` defines one
+cap, `CLAUDE_CAP_BYTES`, and `hooks/hooks.json` declares one handler set whose handlers name the
+artifact, part and total and no host; `CODEX_CAP_BYTES` and the per-host sets are gone. So is the
+native-Codex carrier: a Codex CLI worker's carrier is the dispatch brief, and
+`.github/test-claude-runtime.py` is the one real-CLI SessionStart delivery test.

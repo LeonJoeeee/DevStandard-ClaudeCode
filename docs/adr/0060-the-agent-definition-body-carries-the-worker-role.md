@@ -1,7 +1,7 @@
 # 0060 — The agent definition body carries the worker role
 
 Status: Accepted (2026-09-15). Amends 0059 (its Decision's carrier sentence for the default
-Claude Agent path). Amended by 0061 (2026-09-19). Amended (2026-09-20).
+Claude Agent path). Amended by 0061 (2026-09-19). Amended (2026-09-20). Amended by 0063 (2026-09-29).
 
 **Scope: this ADR decides what the method ships.** It decides what carries a worker its role on
 each host (#402); `reference/worker.md` carries the operative wording, and this record carries the
@@ -95,3 +95,7 @@ take it from the brief. `role_page_carrier`'s assertion is unchanged in kind and
 whole host request rather than its `messages`, which is what lets it see the system prompt and prove
 the single copy. The decision — the definition body is the carrier, delivered without a read — is
 unchanged, and so is the Codex half of the map.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes `codex-native`. Only `--implementation codex`
+takes the role from the brief — `reference/worker.md` plus the marked worker section of
+`reference/harness-codex.md`; both Claude paths take it from the definition body.

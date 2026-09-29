@@ -155,12 +155,13 @@ building blocks:
 - **hooks** — inject instructions at fixed points in the session lifecycle (e.g. delivering the
   working method at session start);
 - **skills** — mature methods invoked at the matching workflow step;
-- **native subagents** — Claude role definitions or a full-role Codex spawn receipt deliver the
-  task and explicit model settings; host support determines tool and permission controls;
-- **external agent processes** — either host can invoke the other CLI for worker duty, with the
-  role in the dispatch prompt and independently managed process lifetime. Codex CLI supplies an
-  OS-enforced role sandbox and can serve as a gating reviewer; Claude CLI workers use host/tool
-  permissions and their assigned worktree, without claiming the same sandbox;
+- **native subagents** — Claude role definitions deliver the task and explicit model settings;
+  host support determines tool and permission controls;
+- **external agent processes** — the Claude Code main session can invoke the Codex or Claude CLI
+  for worker duty, with the role in the dispatch prompt and independently managed process
+  lifetime. Codex CLI supplies an OS-enforced role sandbox and can serve as a gating reviewer;
+  Claude CLI workers use host/tool permissions and their assigned worktree, without claiming the
+  same sandbox;
 - **scripts** — mechanical steps (dispatch, review-packet assembly) made fixed;
 - and **hybrids** of the above.
 

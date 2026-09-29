@@ -41,19 +41,15 @@ jobs:
             | grep -v "actions/" | grep -v "anthropic" | grep .
       - name: Every ADR amendment block is announced by its status line
         run: python3 .github/check-adr-index.py
-      - name: Claude and Codex release versions stay in lockstep
+      - name: Release manifest versions stay in lockstep
         run: |
           python3 - <<'EOF'
           import json
           p = json.load(open('.claude-plugin/plugin.json'))['version']
           m = json.load(open('.claude-plugin/marketplace.json'))['plugins'][0]['version']
-          c = json.load(open('.codex-plugin/plugin.json'))['version']
-          assert p == m == c, f'Claude plugin={p} marketplace={m} Codex plugin={c}'
+          assert p == m, f'Claude plugin={p} marketplace={m}'
           print('versions in lockstep:', p)
           EOF
-
-      - name: Codex package, lifecycle carriers and inherited role guards
-        run: python3 .github/test-codex-plugin.py
 
       - name: live pages carry the surviving 0039/0040 invariants and none of the retired claims
         run: |
@@ -143,8 +139,8 @@ jobs:
                   assert m not in text, f"anchored model {m!r} restated in {f}"
           print(f"anchored settings: one row per role, machine-readable, single-sited (models {models}, read from the page)")
           PY
-          grep -q "A development method for Claude Code and Codex:" .claude-plugin/plugin.json
-          grep -q "A development method for Claude Code and Codex:" .claude-plugin/marketplace.json
+          grep -q "A development method for Claude Code:" .claude-plugin/plugin.json
+          grep -q "A development method for Claude Code:" .claude-plugin/marketplace.json
           grep -q "Codex" README.md
           grep -q "Claude Code and Codex" docs/PRD.md
           ! grep -q "devstandard-fallback" README.md reference/in-repo-writes.md
@@ -164,15 +160,14 @@ jobs:
             grep -l "Amended by 0039 (2026-08-26)" docs/adr/${a}-*.md >/dev/null || { echo "ADR $a missing 0039 status entry"; exit 1; }
             grep -l "see 0039" docs/adr/${a}-*.md >/dev/null || { echo "ADR $a missing 0039 block"; exit 1; }
           done
-          # Both hosts have an installed entry; process executors retain their assigned role.
-          for page in reference/orchestrator.md reference/worker.md; do
-            grep -q 'harness-codex.md' "$page"
-          done
-          test -f .codex-plugin/plugin.json
-          test -f skills/devstandard/SKILL.md
-          grep -q 'CLI workers remain explicit cross-host choices' README.md
-          grep -q 'codex-native' reference/harness-codex.md
-          grep -q 'claude-cli' reference/harness-codex.md
+          # Claude Code is the only host (ADR 0063): no Codex host carrier survives, and the
+          # Codex CLI executor keeps its page, which the orchestrator page routes to.
+          test ! -e .codex-plugin || { echo ".codex-plugin survives"; exit 1; }
+          test ! -e .agents || { echo "Codex repository marketplace survives"; exit 1; }
+          test ! -e skills/devstandard || { echo "Codex recovery skill survives"; exit 1; }
+          grep -q 'harness-codex.md' reference/orchestrator.md
+          grep -q 'BEGIN CODEX WORKER MECHANICS' reference/harness-codex.md
+          ! grep -q 'codex-native' reference/orchestrator.md reference/harness-codex.md reference/worker.md
           echo "static assertions OK"
 
   sweep:
@@ -235,13 +230,9 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/devstandard-codex" @openai/codex@0.156.1
           echo "$RUNNER_TEMP/devstandard-codex/node_modules/.bin" >> "$GITHUB_PATH"
-      - name: Installed plugin hooks, native subagent v1/v2 and cleanup
-        run: python3 .github/test-codex-install.py --log-dir "$RUNNER_TEMP/devstandard-native"
-      - name: Package, quoting, lifecycle selection and role delivery
-        run: |
-          python3 .github/test-codex-plugin.py
-          python3 .github/test-session-start.py
-      - name: Real Codex hook runtime with a local deterministic provider
+      - name: Hook delivery on this runner's own bash
+        run: python3 .github/test-session-start.py
+      - name: Real Codex CLI executor with a local deterministic provider
         run: python3 .github/test-codex-runtime.py --log-dir "$RUNNER_TEMP/devstandard-inline"
       - name: Detached process and review publication regression
         run: |
@@ -253,12 +244,11 @@ jobs:
           python3 - <<'PY'
           import os
           from pathlib import Path
-          for mode in ('native', 'inline'):
-              root = Path(os.environ['RUNNER_TEMP']) / ('devstandard-' + mode)
-              for path in sorted(root.rglob('*')):
-                  if path.is_file():
-                      print(f'--- {mode}/{path.relative_to(root)} ---')
-                      print(path.read_text())
+          root = Path(os.environ['RUNNER_TEMP']) / 'devstandard-inline'
+          for path in sorted(root.rglob('*')):
+              if path.is_file():
+                  print(f'--- inline/{path.relative_to(root)} ---')
+                  print(path.read_text())
           PY
 
   claude:

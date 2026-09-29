@@ -4,7 +4,7 @@ Status: Amended by 0050 (2026-09-09). Superseded by 0045 (2026-09-05). Amended b
 stand), 0006 (harness-native orchestration), 0007 and 0019 (the hook's Codex branch delivers the
 method, not a role), 0008 and 0024 (the tier cap scoped to Claude-spawned agents), 0015 (the cockpit
 is harness-neutral), 0016 (the harness assumption widened), and 0018 (the fallback reframed as
-install guidance). Amended by 0056 (2026-09-11).
+install guidance). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 *This ADR decides what DevStandard ships on every harness — a reader in any seeded project should
 take it as method.*
@@ -90,3 +90,7 @@ human sends it.
 the shared method, using the current role split and a bounded Codex adapter. Codex hosts use native
 workers and independent read-only CLI gating review. This does not restore the older footprint,
 fallback block or routing defaults recorded here. Dispatch still supplies worker identity.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes Codex hosting again: Codex runs the method only
+as a dispatched CLI worker or reviewer whose role and identity dispatch supplies. Codex as
+orchestrator is out of scope, and nothing recorded here is restored.

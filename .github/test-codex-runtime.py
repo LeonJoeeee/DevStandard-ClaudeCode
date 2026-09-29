@@ -509,15 +509,16 @@ def dispatched_worker_prompt(worktree):
 
     The dispatcher reads `reference/worker.md` unchanged — the page carries no template slot
     since #402 — then appends the marked worker-facing section of `reference/harness-codex.md`,
-    because a Codex CLI worker has no carrier that survives a lost packet (ADR 0061). It writes the result as the lane's brief and hands it to
-    `codex exec -` on stdin; `.github/test-dispatch.py` asserts the child's stdin carries it.
+    because a Codex CLI worker has no carrier that survives a lost packet (ADR 0061). It writes the
+    result as the lane's brief and hands it to `codex exec -` on stdin; `.github/test-dispatch.py`
+    asserts the child's stdin carries it.
     This rebuilds the same shape so the real CLI can be asked what this test owes: do those exact
     bytes reach the model?
     """
     page = (ROOT / 'reference/worker.md').read_text()
-    adapter = (ROOT / 'reference/harness-codex.md').read_text()
-    mechanics = adapter.split('<!-- BEGIN CODEX WORKER MECHANICS -->\n', 1)[1] \
-                       .split('<!-- END CODEX WORKER MECHANICS -->\n', 1)[0].strip('\n')
+    codex_page = (ROOT / 'reference/harness-codex.md').read_text()
+    mechanics = codex_page.split('<!-- BEGIN CODEX WORKER MECHANICS -->\n', 1)[1] \
+                          .split('<!-- END CODEX WORKER MECHANICS -->\n', 1)[0].strip('\n')
     require(mechanics, 'reference/harness-codex.md carries no worker-facing section')
     carried = page + '\n' + mechanics + '\n'
     packet = ('\n\n# Task packet\nIssue: https://github.com/o/r/issues/396\n'

@@ -2,7 +2,7 @@
 
 Status: Amended by 0050 (2026-09-09). Accepted (2026-09-07). Supersedes 0006 and 0008. Amends 0015 (its executor and
 conflict-handling points), 0036 and 0040 (their rung vocabulary, which now names a retired
-ladder). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended (2026-09-20).
+ladder). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended (2026-09-20). Amended by 0063 (2026-09-29).
 
 *This ADR changes what DevStandard ships — executable scripts, hooks and agent definitions inside
 the installed plugin, and a different default for who does the work — so a reader in a seeded
@@ -117,3 +117,8 @@ described; the count is reported and warned about rather than enforced, because 
 the cap ever firing and the reviewer's non-convergence clause carries the stop signal #173 measured.
 0046's 2026-09-20 block states it; `reference/orchestrator.md`'s Review packets section carries the
 operative wording.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes Codex hosting and its native-dispatch receipts.
+Dispatch runs from a Claude Code orchestrator; Codex is the `--implementation codex` CLI executor.
+Dispatch-first execution, issue/branch/worktree lanes, review accounting and the refusal to bundle
+per-task workflows are unchanged.

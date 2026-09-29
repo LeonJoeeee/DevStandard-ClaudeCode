@@ -2,7 +2,7 @@
 
 Status: Amended by 0050 (2026-09-09). Accepted (2026-08-25). Amended by 0045 (2026-09-05). Amended by 0038 (2026-08-26). Amended by 0040 (2026-08-26). Amended by 0047 (2026-09-07). Amended (2026-09-07). Amended (2026-09-11). Extends 0008 (the ladder's executors; the rungs, run sizing and
 rationing are unchanged). Cites 0024 without amending it: the cap and the tier names stand for every
-agent this method spawns through its own harness, and do not reach a process it does not spawn. Amended by 0056 (2026-09-11).
+agent this method spawns through its own harness, and do not reach a process it does not spawn. Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -159,3 +159,9 @@ dated standing setting, and a fallback only where it keeps the gate's properties
 by 0056. A Codex host uses native workers and independent read-only CLI gating review, retaining
 explicit settings and evidence. The unavailable-executor fallback still requires the gate's
 properties; it never lowers them. `reference/external-agent.md` owns these implementation bindings.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes Codex-main dispatch and native Codex workers, so
+the 0045 block's exclusion applies again. Codex is the CLI executor a Claude Code orchestrator
+invokes, under its OS sandbox; the unavailable-executor fallback still keeps the gate's properties
+and never lowers them. `reference/orchestrator.md`'s Dispatching to an executor section owns these
+bindings.

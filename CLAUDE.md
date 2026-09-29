@@ -82,15 +82,9 @@ python3 .github/test-dispatch.py
 # Review-packet assembly, green-head admission, publication, and round accounting
 python3 .github/test-review-packet.py
 
-# Codex package and real CLI hook qualification. Runtime/install require the CLI
+# The dispatched Codex CLI executor (role hook, dispatched brief, MCP admission), using the CLI
 # version pinned in ci.yml; the model provider is a local deterministic fixture.
-# Install temporarily registers a unique plugin/marketplace and edits/restores ~/.codex/config.toml;
-# it requires no other enabled Codex plugin and verifies cleanup.
-python3 .github/test-codex-plugin.py
 python3 .github/test-codex-runtime.py
-# Actual native v1/v2 spawn/wait; install also checks this against cached plugin sources.
-python3 .github/test-codex-native.py
-python3 .github/test-codex-install.py
 # Claude native Agent and CLI roles, using the version pinned in ci.yml.
 python3 .github/test-claude-runtime.py --dispatch-cli --log-dir "${TMPDIR:-/tmp}/devstandard-claude-runtime"
 
@@ -131,8 +125,8 @@ test "$(gh api "repos/LeonJoeeee/devstandard/issues/$PR/comments" \
 #    Verdicts predating that convention carry headings of their own; on a PR that old, read for
 #    yourself rather than trusting this matcher's silence.
 
-# 6. all release manifests in lockstep (and equal to the tag, on release)
-python3 -c 'import json; p=json.load(open(".claude-plugin/plugin.json"))["version"]; m=json.load(open(".claude-plugin/marketplace.json"))["plugins"][0]["version"]; c=json.load(open(".codex-plugin/plugin.json"))["version"]; assert p==m==c; print("lockstep",p)'
+# 6. both release manifests in lockstep (and equal to the tag, on release)
+python3 -c 'import json; p=json.load(open(".claude-plugin/plugin.json"))["version"]; m=json.load(open(".claude-plugin/marketplace.json"))["plugins"][0]["version"]; assert p==m; print("lockstep",p)'
 ```
 
 **The verdict is posted when it arrives, not when you remember.** Five consecutive merges once went
@@ -209,10 +203,9 @@ Two sites take a specific form:
 
 The role pages' two-checks paragraph says releasing is the human's call. **For this repo that call
 was delegated standing on 2026-07-24** (issue #37): since v0.9.3 the agent releases right after each merge —
-tag, push — with the release manifests already in lockstep (`.claude-plugin/plugin.json`,
-`.claude-plugin/marketplace.json`, `.codex-plugin/plugin.json`), without asking
-per release. The goal was that every merged improvement reaches the human's other sessions as fast as
-possible.
+tag, push — with the release manifests already in lockstep (`.claude-plugin/plugin.json` and
+`.claude-plugin/marketplace.json`), without asking per release. The goal was that every merged
+improvement reaches the human's other sessions as fast as possible.
 
 **The delegation is issue #37, and nothing machine-readable.** It was a `standing_release` entry in
 the guard's configuration file until 2026-09-10, when that file — with `human_logins`,
@@ -229,7 +222,7 @@ stays on the human's ask-axes and `reference/ci-pipelines.md`'s tag-triggered de
 description; a reviewer's disagreement is a Note, never a separate PR (human ruling, 2026-09-06,
 issue #226). If a bare bump PR is unavoidable, it needs no issue or check-1 reviewer: the CI
 lockstep gate is its review. It still merges through `scripts/guard merge`.
-The guard's bare-bump waiver and rebase exemption cover all three synchronized manifest version
+The guard's bare-bump waiver and rebase exemption cover both synchronized manifest version
 fields, with equal old and new versions and no other line or mode changes; the rebase proof keeps
 its ordering checks (`reference/orchestrator.md`'s Merge and rebase proof section).
 

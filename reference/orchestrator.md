@@ -2,7 +2,7 @@
 
 ## 1. Who the actors are and what each owns
 
-This is the complete instruction for a project's Claude Code or Codex orchestrator. DevStandard
+This is the complete instruction for a project's Claude Code orchestrator. DevStandard
 exists to return the human's scarce time; its machinery reserves that time for direction and
 judgment. The orchestrator is an event loop, not a worker for one lane.
 
@@ -176,12 +176,12 @@ checkout; it assembles the whole brief from the issue's ordered record and the c
 
 **Dispatched work goes to the host's own subagent.** The human's instruction selects another
 supported executor for one dispatch or standing until their next instruction. The choice lives with
-the orchestrator, not in a project file. Claude uses `--implementation claude`; Codex uses
-`--implementation codex-native` for workers and independent read-only `--implementation codex` for
-gating review under `reference/harness-codex.md`. Claude CLI is an explicit cross-host worker, not a
-qualified gating reviewer. Native workers inherit host permissions; Codex CLI workers receive an
-OS sandbox scoped to their lane. Never use a bypass-all-sandboxing mode. Report a blocked required
-action instead of loosening the sandbox.
+the orchestrator, not in a project file. The default is `--implementation claude`; Codex runs as a
+CLI process, `--implementation codex`, for a worker or an independent read-only gating reviewer
+under `reference/harness-codex.md`. Claude CLI is an explicit worker process, not a qualified gating
+reviewer. Native workers inherit host permissions; Codex CLI workers receive an OS sandbox scoped to
+their lane. Never use a bypass-all-sandboxing mode. Report a blocked required action instead of
+loosening the sandbox.
 
 Codex CLI dispatch's hook-trust bypass is invocation-wide, not limited to the fixed role hook.
 Before dispatch, vet every effective enabled hook source, including installed plugin hooks. The
@@ -238,8 +238,8 @@ undefined effort inherits the session's. A project's `CLAUDE.md`, the issue, or 
 <plugin>/scripts/dispatch 123 --adopt --base origin/main --branch <existing-branch> --worktree <existing-worktree> --pr 124
 <plugin>/scripts/dispatch 123 --purpose reviewer --packet <complete-review-packet>
 <plugin>/scripts/dispatch 123 --cleanup --pr 124
-# Codex host native worker
-<plugin>/scripts/dispatch 123 --purpose worker --base origin/main --implementation codex-native
+# Codex CLI worker
+<plugin>/scripts/dispatch 123 --purpose worker --base origin/main --implementation codex
 ```
 
 Fetch the named base first. New identities default deterministically to `task/ISSUE-TITLE` and
@@ -262,9 +262,8 @@ preconditions `--help` states:
 It resolves one CLI run without inventing an exit or output. If inspection is unavailable, remain
 blocked. A live or uncertain executor never permits a second writer or cleanup.
 
-Native dispatch prepares a receipt, not a running worker: Codex-native writes `native-spawn.json`
-and Claude an Agent-tool instruction, whose fields `--help` and `reference/harness-codex.md` carry.
-Pass it to the native tool with no forked history and record the returned handle; `--resume HANDLE`
+Native dispatch prepares a receipt, not a running worker: an Agent-tool instruction whose fields
+`--help` carries. Pass it to the Agent tool and record the returned handle; `--resume HANDLE`
 reaches that same finished child, and a missing handle means a fresh executor, never an invented
 one. The dispatcher observes no native handle, so record each returned handle on the issue: that
 record is the evidence one finished, and no flag attests it. A live CLI run still blocks reuse.
@@ -306,10 +305,10 @@ alone defines judging: Goal and both Floors decide readiness. Record failed atte
 ```sh
 <plugin>/scripts/review-packet assemble 124 --issue 123 --architecture-level no --output <session-scratch>
 <plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch>
-# Codex host
-<plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --implementation codex --wait
+# Codex CLI reviewer
+<plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --implementation codex
 <plugin>/scripts/review-packet status 124 --issue 123
-# Claude host, after invoking the returned Agent instruction
+# Claude reviewer, after invoking the returned Agent instruction
 <plugin>/scripts/review-packet publish 124 --issue 123 --attempt <comment-id> --verdict <verdict-file>
 <plugin>/scripts/review-packet fail 124 --issue 123 --attempt <comment-id> --reason '<why no reviewer launched>'
 <plugin>/scripts/review-packet rule 124 --issue 123 --decision continue --reason '<blocking goal gap or missing evidence>'

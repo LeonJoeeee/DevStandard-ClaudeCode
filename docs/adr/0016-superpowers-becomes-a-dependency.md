@@ -1,6 +1,6 @@
 # 0016 — superpowers becomes a dependency: point at its skills, don't copy them
 
-Status: Accepted (2026-07-16). Amended by 0045 (2026-09-05). Supersedes 0002. Amended (2026-07-16). Amended by 0039 (2026-08-26). Amended by 0049 (2026-09-07). Amended (2026-09-07). Amended by 0056 (2026-09-11).
+Status: Accepted (2026-07-16). Amended by 0045 (2026-09-05). Supersedes 0002. Amended (2026-07-16). Amended by 0039 (2026-08-26). Amended by 0049 (2026-09-07). Amended (2026-09-07). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -48,3 +48,7 @@ empty by design. The dependency, step-local sovereignty and the never-point list
 0056. Install superpowers on either executing host and resolve its skills from the existing role
 bindings. The Codex adapter maps access to those installed skills; it does not copy craft or revive
 a substance-only replacement. Dependency, step-local sovereignty and the never-point list remain.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes the Codex host and its adapter. Superpowers is
+installed alongside DevStandard in Claude Code; a Codex CLI worker receives its role's skill
+bindings in the dispatch brief. Dependency, step-local sovereignty and the never-point list remain.

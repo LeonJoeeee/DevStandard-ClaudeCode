@@ -1,6 +1,6 @@
 # 0056 — Restore Codex host support with shared roles and native workers
 
-Status: Accepted (2026-09-11). Supersedes 0045. Amended (2026-09-11). Amended (2026-09-12). Amended (2026-09-20).
+Status: Superseded by 0063 (2026-09-29). Originally Accepted (2026-09-11). Supersedes 0045. Amended (2026-09-11). Amended (2026-09-12). Amended (2026-09-20).
 Amended by 0061 (2026-09-19).
 Amends 0006, 0007, 0008, 0011, 0015, 0016,
 0018, 0019, 0022, 0024, 0035, 0036, 0038, 0039, 0040, 0046, 0047, 0049, 0050, 0051 and 0052 (their live host, delivery, routing, version-exemption or sandbox clauses).

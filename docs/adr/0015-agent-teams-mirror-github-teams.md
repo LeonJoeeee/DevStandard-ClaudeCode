@@ -4,7 +4,7 @@ Status: Accepted (2026-07-09). Amended by 0045 (2026-09-05). Supersedes 0005. Am
 every-session budget, relaxed to carry the collaboration model inline) and 0009 (its "= one
 session" invariant). Amended by 0022 (2026-07-24, small-change ceremony exemption). Amended
 (2026-08-22). Amended by 0039 (2026-08-26). Amended by 0047 (2026-09-07). Amended by 0049
-(2026-09-07). Amended (2026-09-07). Amended by 0056 (2026-09-11).
+(2026-09-07). Amended (2026-09-07). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -85,3 +85,8 @@ requires; both have announced `Amended by 0015 (2026-07-09)` since that date.
 Claude Code or Codex orchestrator uses the shared role source and its host's native workers. Codex
 uses an independent read-only CLI for gating review. Separate live-session worker lanes remain
 outside the configuration, and dispatch still supplies worker identity.
+
+**Amendment (2026-09-29, see 0063):** 0063 restores the Claude-only cockpit: one Claude Code
+orchestrator with its native workers. Codex takes part only as a dispatched CLI worker or read-only
+gating reviewer, its role supplied by the dispatch brief. Separate live-session worker lanes remain
+outside the configuration.

@@ -1,6 +1,6 @@
 # 0007 — No router, no skill: the hook injects a one-page core
 
-Status: Accepted (2026-06-11). Amended by 0045 (2026-09-05). Supersedes 0001. Amended by 0015 (2026-07-09); Amended (2026-07-16); Amended by 0019 (2026-07-24, delivery mechanism). Amended by 0031. Amended (2026-08-17). Amended by 0038 (2026-08-26). Amended by 0039 (2026-08-26). Amended by 0042 (2026-08-31). Amended by 0049 (2026-09-07). Amended (2026-09-07). Amended by 0056 (2026-09-11).
+Status: Accepted (2026-06-11). Amended by 0045 (2026-09-05). Supersedes 0001. Amended by 0015 (2026-07-09); Amended (2026-07-16); Amended by 0019 (2026-07-24, delivery mechanism). Amended by 0031. Amended (2026-08-17). Amended by 0038 (2026-08-26). Amended by 0039 (2026-08-26). Amended by 0042 (2026-08-31). Amended by 0049 (2026-09-07). Amended (2026-09-07). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -105,3 +105,8 @@ without `core.md`.
 artifacts and a bounded adapter. The no-skill clause now excludes an explicit recovery entry that
 reads those sources when hooks are unavailable; it does not replace automatic delivery with skill
 self-triggering. No router, the on-demand reference split and the @path ban remain.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes Codex host delivery, its adapter and the
+`devstandard` recovery skill, so the 0056 block's exception to the no-skill clause has nothing left
+to except: the clause applies whole again. The Claude hook's per-artifact delivery, no router, the
+on-demand reference split and the @path ban are unchanged.

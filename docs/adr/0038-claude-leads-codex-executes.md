@@ -7,7 +7,7 @@ AGENTS.md note is reframed: the fallback block is delivery, not memory). Superse
 an earlier draft of this number recorded a symmetric either-side-may-lead design that was abandoned
 before any merge — it survives in the branch history and in
 `docs/specs/2026-08-25-devstandard-codex-adapter.md` (kept as `abandoned`), and this ADR is the
-decision that replaced it. Amended by 0056 (2026-09-11).
+decision that replaced it. Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
 
 *This ADR decides what DevStandard ships and how its projects are topologized — a reader in any
 seeded project should take it as method.*
@@ -108,3 +108,7 @@ only which executor is presumed has changed.
 ADR's permanent Codex-worker identity, marker or adoption ceremony. Main sessions may use either
 host; dispatch supplies worker identity. The earlier measurements remain historical evidence, not
 current compatibility qualification.
+
+**Amendment (2026-09-29, see 0063):** 0063 supersedes 0056. Main sessions are Claude Code only;
+Codex executes when dispatched, with its identity supplied by dispatch. This ADR stays superseded,
+and its measurements stay history.

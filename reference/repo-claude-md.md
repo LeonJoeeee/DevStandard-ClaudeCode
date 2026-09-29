@@ -2,7 +2,7 @@
 
 CI settles the project's commands — capture them while they're fresh: generate a repo-root `CLAUDE.md` — when there is something to put in it (below), as admitted by `reference/in-repo-writes.md` — one page hard max. Claude Code reads it natively at every session start in the repo, so it is the one place operational facts reach every clean-context worker automatically. Three kinds of content — plus one conditional fourth, and nothing else:
 
-**`CLAUDE.md` stays the operational-memory file on every harness.** Both main-session hosts and every dispatched worker read it; Codex reads it explicitly (`reference/orchestrator.md` and `reference/worker.md`). Write discoveries back here through the PR. Respect a project's existing `AGENTS.md` instructions, which Codex loads natively, while keeping each operational fact at its established source. Do not duplicate this memory or install a managed method block in `AGENTS.md`.
+**`CLAUDE.md` stays the operational-memory file on every harness.** The Claude Code main session and every dispatched worker read it; a Codex worker reads it explicitly (`reference/orchestrator.md` and `reference/worker.md`). Write discoveries back here through the PR. Respect a project's existing `AGENTS.md` instructions, which Codex loads natively, while keeping each operational fact at its established source. Do not duplicate this memory or install a managed method block in `AGENTS.md`.
 
 - **Commands** — install, test, run (the same ones CI just encoded);
 - **Environment gotchas** — ports in use, services that must be up, local-vs-CI differences;

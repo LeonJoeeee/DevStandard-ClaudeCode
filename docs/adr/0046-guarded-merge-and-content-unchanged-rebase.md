@@ -1,6 +1,6 @@
 # 0046 — Guard the reviewed head and prove a content-unchanged rebase
 
-Status: Accepted (2026-09-05). Amends 0011 and 0035 (rebase exception). Amended (2026-09-07). Amended by 0051 (2026-09-10). Amended by 0052 (2026-09-10). Amended by 0056 (2026-09-11). Amended (2026-09-13). Amended (2026-09-20).
+Status: Accepted (2026-09-05). Amends 0011 and 0035 (rebase exception). Amended (2026-09-07). Amended by 0051 (2026-09-10). Amended by 0052 (2026-09-10). Amended by 0056 (2026-09-11). Amended (2026-09-13). Amended (2026-09-20). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -220,3 +220,7 @@ other. No record exists of the cap ever firing, and
 reviewer's own non-convergence clause reports. Everything else the Decision states, including that
 a ruling cannot waive the Floor, is unchanged. `reference/orchestrator.md`'s Review packets section
 carries the operative wording.
+
+**Amendment (2026-09-29, see 0063):** 0063 deletes `.codex-plugin/plugin.json`. The exemption covers
+the two Claude manifests' version lines; the mode and rebase-ordering checks remain.
+`reference/orchestrator.md`'s Merge and rebase proof section carries the operative predicate.

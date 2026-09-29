@@ -1,6 +1,6 @@
 # 0051 — A guard that cannot be complete guards the ordinary case
 
-Status: Accepted (2026-09-10). Amends 0046 (role hooks). Amended by 0052 (2026-09-10). Amended (2026-09-11). Amended by 0055 (2026-09-11). Amended by 0056 (2026-09-11). Amended (2026-09-12). Amended by 0062 (2026-09-20). Amended (2026-09-20).
+Status: Accepted (2026-09-10). Amends 0046 (role hooks). Amended by 0052 (2026-09-10). Amended (2026-09-11). Amended by 0055 (2026-09-11). Amended by 0056 (2026-09-11). Amended (2026-09-12). Amended by 0062 (2026-09-20). Amended (2026-09-20). Amended by 0063 (2026-09-29).
 
 ## Context
 
@@ -253,3 +253,9 @@ rule: **nothing in the hook refuses because the hook broke.** Only the word rule
 are unchanged. The residual this widens is named like every other: a guard whose own code is broken
 guards nothing until someone fixes it, and denying everything meanwhile is not a stricter fence —
 it is an outage, on the side of the layers this ADR says carry the real guarantee.
+
+**Amendment (2026-09-29, see 0063):** 0063 removes native Codex workers. The role hook keeps the
+fallback that gives a child event carrying `agent_id` but no agent type the worker list, because
+removing it could only loosen the guard for an untyped child event. The Codex CLI sandbox clauses
+and Claude CLI workers' host/tool permissions are unchanged; `reference/orchestrator.md`'s Guarded
+operations section owns the operative boundary.

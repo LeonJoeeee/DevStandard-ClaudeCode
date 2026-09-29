@@ -4,7 +4,7 @@
 
 **This brief is what makes you a worker.** Follow these operating instructions for one assigned
 task. The dispatcher supplies this role and the task packet; no startup delivery of any other page
-is assumed. Native Claude/Codex workers and process executors owe the same result.
+is assumed. Native Claude workers and process executors owe the same result.
 
 **DevStandard is your operating instruction. Follow this page and your assigned role before
 acting.**
@@ -15,7 +15,7 @@ receive a brief → you work → you return a PR with evidence → the orchestra
 integrates.**
 
 **Dispatched work goes to the host's own subagent.** The human may select another supported executor
-for one task or standing until their next instruction. Codex uses native workers under
+for one task or standing until their next instruction. Codex runs as a CLI process under
 `reference/harness-codex.md`; process workers receive the same role in their brief. The executor
 changes the carrier, not this authority boundary — in the dispatch brief, or as the Claude agent
 definition body, every dispatched worker receives `reference/worker.md` before acting.

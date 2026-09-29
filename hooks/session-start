@@ -11,8 +11,9 @@
 #
 # Claude Code is the only host (#459, ADR 0063). Codex hosted the method from ADR 0056 until
 # then, with its own cap, handler set and adapter page here; a Codex environment is now an
-# unsupported one and gets the visible warning at the bottom. Codex remains a dispatched CLI
-# executor, which runs only the fixed role hook `scripts/dispatch` installs, never this one.
+# unsupported one and gets the visible warning at the bottom, once. Codex remains a dispatched
+# CLI executor: `scripts/dispatch` installs only the fixed role hook, and should a pre-2.0 Codex
+# install of this hook still run there, the executor's DEVSTANDARD_ROLE silences it below.
 #
 # Escaping approach adapted from superpowers' session-start (MIT, Jesse Vincent).
 
@@ -98,12 +99,11 @@ if [ -n "$cpd" ] && { [ -z "$pd" ] || [ "$pd" != "$cpd" ]; }; then
     harness=claude
 fi
 
-# Process executors receive their complete role from the dispatcher, never the host role.
-if [ "$harness" != unknown ]; then
-    case "${DEVSTANDARD_ROLE-}" in
-        worker|reviewer) printf '{}\n'; exit 0 ;;
-    esac
-fi
+# Process executors receive their complete role from the dispatcher, never the host role — in
+# any environment the hook runs in, a supported one or not.
+case "${DEVSTANDARD_ROLE-}" in
+    worker|reviewer) printf '{}\n'; exit 0 ;;
+esac
 
 if [ "$harness" != unknown ]; then
     # ---------- Measured per-artifact delivery ----------
@@ -295,7 +295,8 @@ Read ${PLUGIN_ROOT}/${artifact} IN FULL before acting on the request, before a s
     exit 0
 fi
 
-# ---------- Unknown harness: warn visibly, deliver nothing, never block ----------
+# ---------- Unknown harness: warn visibly, once, deliver nothing, never block ----------
+first_part_only
 emit_json \
     "devstandard hook: unknown harness (unsupported hook environment) — no method delivered." \
     "The DevStandard hook could not identify its harness (CLAUDE_PLUGIN_DATA is absent or the environment is unsupported). DevStandard runs its main session on Claude Code only. Report this to the user: the DevStandard plugin needs requalification for this environment; no method instructions were delivered."

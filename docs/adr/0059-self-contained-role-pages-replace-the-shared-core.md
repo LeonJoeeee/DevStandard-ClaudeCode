@@ -128,4 +128,4 @@ one output may be is still the host's answer rather than ours.
 cap, `CLAUDE_CAP_BYTES`, and `hooks/hooks.json` declares one handler set whose handlers name the
 artifact, part and total and no host; `CODEX_CAP_BYTES` and the per-host sets are gone. So is the
 native-Codex carrier: a Codex CLI worker's carrier is the dispatch brief, and
-`.github/test-claude-runtime.py` is the one real-CLI delivery test.
+`.github/test-claude-runtime.py` is the one real-CLI SessionStart delivery test.

@@ -190,8 +190,9 @@ def codex_worker_mechanics():
     binding, of spawning, and of the sandbox differ per harness, so each family reads its own page
     and never the other's (ADR 0061). A Claude worker receives `reference/harness-claude.md`
     through the agent definition body, which the harness loads as its system prompt. A Codex CLI
-    worker has no such carrier — no DevStandard startup hook runs in it, only the fixed role hook
-    — which is why the brief carries this section for `codex` instead.
+    worker has no such carrier — dispatch installs only the fixed role hook, and a startup hook
+    that still runs there from a pre-2.0 Codex install is silenced by `DEVSTANDARD_ROLE` — which
+    is why the brief carries this section for `codex` instead.
 
     Only the marked worker-facing section travels. The rest of that page is orchestrator-facing:
     it tells the dispatching session how to run Codex, and a worker must not read it as its own

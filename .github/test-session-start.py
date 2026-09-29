@@ -256,6 +256,11 @@ class DeliveryTest(unittest.TestCase):
                 self.assertIn('unknown harness', output['systemMessage'])
                 self.assertNotIn('MUST_NOT_DELIVER', context)
                 self.assertNotIn(ORCHESTRATOR, context)
+                # Warned once, by the first of the declared handlers, not once per handler.
+                self.assertEqual(self.emit('orchestrator', {'source': 'startup'}, 2, 16), {})
+                # A dispatched role is silent here as everywhere: it carries its own role.
+                self.env['DEVSTANDARD_ROLE'] = 'worker'
+                self.assertEqual(self.emit('orchestrator', {'source': 'startup'}, 1, 16), {})
 
     def test_unrelated_inherited_plugin_data_preserves_claude_delivery(self):
         (self.root / ORCHESTRATOR).write_text('INHERITED_ENV_TAIL')

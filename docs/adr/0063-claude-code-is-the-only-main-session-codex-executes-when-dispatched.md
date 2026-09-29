@@ -31,13 +31,15 @@ method goes; everything a Claude Code orchestrator needs to dispatch Codex stays
 **Removed:** `.codex-plugin/`; the repository marketplace under `.agents/plugins/`; the Codex branch
 of `hooks/session-start` with its cap, its handler set in `hooks/hooks.json`, the per-handler host
 argument that chose between the two sets and the `additionalContextLimit` key #389 added for the
-Codex host; the `devstandard` skill, which existed only for hookless recovery on that host; the
+Codex host; the `devstandard` skill, which existed for hookless recovery on that host — Claude Code
+also discovered it, but there it only pointed at the role pages SessionStart already delivers; the
 host-facing content of `reference/harness-codex.md` — its context delivery, native workers, hook
 trust and resume trigger; the `--implementation codex-native` dispatcher path and its
 `native-spawn.json` receipt; the Codex-host tests `test-codex-plugin.py`, `test-codex-native.py` and
 `test-codex-install.py`, and the host cases of `test-codex-runtime.py`. A Codex environment running
 the hook — `PLUGIN_DATA` alone or with an equal-valued Claude alias — is an unsupported environment
-again, with the visible warning 0045 gave it.
+again, with the visible warning 0045 gave it, stated once; a dispatched role's `DEVSTANDARD_ROLE`
+silences the hook in any environment.
 
 **Kept:** `--implementation codex` for workers and read-only gating review; its OS sandbox, the
 fixed role hook it runs under `--dangerously-bypass-hook-trust` and the orchestrator's duty to vet
@@ -70,10 +72,10 @@ because a supported host is removed. A Codex installation of an earlier release 
 it is uninstalled; nothing here edits a user's Codex configuration. Codex lanes launched from Claude
 Code are unaffected.
 
-The Codex CI job keeps the Linux sandbox prerequisites, the pinned CLI and the executor cases — the
-role hook, the dispatched brief reaching the model byte for byte, MCP admission per sandbox mode —
-plus the dispatch and review-packet suites on macOS. Its install, native-spawn, package and
-hook-delivery steps go.
+The Codex CI job, on Ubuntu and macOS, keeps the Linux sandbox prerequisites, the pinned CLI and the
+executor cases — the role hook, the dispatched brief reaching the model byte for byte, MCP admission
+per sandbox mode — plus the hook-delivery, dispatch and review-packet suites on each runner's own
+shell. Its install, native-spawn and package steps go.
 
 ADR bodies stay as written. Dated amendment blocks reconcile the live statements 0056 and its
 amendments left routing a reader to a Codex host, to `codex-native`, to the adapter or to a third

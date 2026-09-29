@@ -1242,7 +1242,7 @@ class RoleRuleTest(unittest.TestCase):
                                              process_role=process_role), command)
                 self.assertIn(process_role, reason)
 
-    def test_generic_claude_children_keep_the_parent_role_but_codex_children_default_to_worker(self):
+    def test_named_children_keep_the_parent_role_but_untyped_children_default_to_worker(self):
         # Removing the agent_type constraint would incorrectly bind Claude research children.
         for agent_type, denied in [('general-purpose', False), ('Explore', False),
                                    ('default', True), (None, True)]:

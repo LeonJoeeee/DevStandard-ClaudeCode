@@ -27,9 +27,10 @@ def main():
     # Explicit hook arguments still bind the role before either source.
     if args.role == 'orchestrator' and event.get('agent_type') in ('worker', 'devstandard:worker', 'reviewer', 'devstandard:reviewer'):
         role = event['agent_type'].split(':')[-1]
-    # Native Codex children inherit hooks without a process-scoped environment.
-    # Both native APIs identify the child through agent_id (often type=default).
-    # Only absent/default types take this fallback; named Claude research children do not.
+    # A child event carrying agent_id but no agent type (absent or `default`) takes the worker
+    # list. It was added for native Codex children (ADR 0056), gone with the Codex host (ADR
+    # 0063); it stays because an untyped child event would otherwise take the orchestrator's
+    # narrower list. Named Claude research children keep their parent role.
     if (role == 'orchestrator' and event.get('agent_type') in (None, 'default')
             and isinstance(event.get('agent_id'), str) and event['agent_id'].strip()):
         role = 'worker'

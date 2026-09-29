@@ -200,22 +200,43 @@ gate's properties—gating review or a design challenge—that gate is blocked, 
 #### Model and effort
 
 The method has three agents. The human picks the orchestrator's model by hand. The worker and the
-reviewer are anchored: model and effort are fixed for the role, not routed per task.
+reviewer are anchored: model and effort are fixed for the role, not routed per task. Claude `opus`
+and Codex `gpt-6-astra` are one tier, as are Claude `sonnet` and Codex `gpt-6-sol`; `gpt-6-luna` is
+the tier below.
 
 | Role | Codex | Claude |
 |---|---|---|
-| worker | `gpt-6-sol` at `high` | `opus` at `high` |
-| reviewer | `gpt-6-sol` at `high` | `opus` at `high` |
+| worker | `gpt-6-astra` at `high` | `opus` at `high` |
+| reviewer | `gpt-6-astra` at `high` | `opus` at `high` |
 
-`scripts/dispatch` reads those two rows, so keep the cell form. Arbitration — a genuine dilemma, an
-irreversible judgment, an architecture-level acceptance — takes Claude `fable`, whose effort
-inherits the session, or Codex `gpt-6-astra` at `high`.
+`scripts/dispatch` reads those two rows, so keep the cell form. The Codex column is the equal-tier
+executor a human selects, and the disclosed re-dispatch (When it is not there) when Claude is
+missing, erroring or out of quota. Arbitration — a genuine dilemma, an irreversible judgment, an
+architecture-level acceptance — takes Codex `gpt-6-astra` at `max`, read-only from this session. It
+informs the decision and does not make it: a genuine dilemma or irreversible judgment still goes to
+the human (the stuck-work ladder below). With a PR, commission it through the Codex reviewer path:
+`review-packet start --implementation codex --model gpt-6-astra --effort max`. Before a PR exists,
+run a fresh, history-free Codex process from the checkout with the question and its evidence on
+stdin, and post the captured answer on the issue as the durable record:
 
-A one-off subagent a role spawns for its own task is neither of the anchored roles. On Claude it is
-always `opus`, at the effort it inherits from the spawning role. On Codex, judgment work — research,
-checking a diff, challenging a design — takes `gpt-6-sol` at `high`; scans, first-pass triage,
-evidence gathering, fixed-field extraction, list making and format conversion take `gpt-6-luna` at
-`max`.
+```sh
+codex exec --ephemeral -s read-only -m gpt-6-astra -c model_reasoning_effort='"max"' -o <session-scratch>/answer.md - < <session-scratch>/question.md
+```
+
+A helper — a one-off subagent any role spawns for its own task — is neither anchored role and never
+goes through `scripts/dispatch` or `scripts/review-packet`. It always uses its own harness's
+built-in subagent, never the other harness's, with the model its work takes:
+
+| Helper's work | Codex | Claude |
+|---|---|---|
+| Its conclusion directly decides a merge or a design (checking a worker's diff, challenging a design) | `gpt-6-astra` at `high` | `opus` |
+| Ordinary judgment (research, checking) | `gpt-6-sol` at `high` | `sonnet` |
+| Mechanical (scans, first-pass triage, evidence gathering, fixed-field extraction, lists, format conversion) | `gpt-6-luna` at `max` | `sonnet` |
+
+A Claude helper's effort inherits its caller's. Each role is told this where it already reads:
+`reference/harness-claude.md` and `agents/reviewer.md` carry the Claude column, and dispatch reads
+the Codex column into a Codex packet and sets Codex's default subagent to the ordinary-judgment row,
+so keep this table's cell form too.
 
 Bulk repetitive work — building a retrieval index or a knowledge graph, batch extraction and
 tagging — is not agent work: run a script against a cheap model endpoint, named in the needing

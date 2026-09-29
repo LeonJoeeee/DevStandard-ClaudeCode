@@ -549,7 +549,7 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
 
     def test_start_forwards_independent_model_and_effort_overrides(self):
         for implementation in ('codex', 'claude'):
-            default = ('gpt-6-sol', 'high') if implementation == 'codex' else ('opus', 'high')
+            default = ('gpt-6-astra', 'high') if implementation == 'codex' else ('opus', 'high')
             for flags, expected in [(('--model', 'override-model'), ('override-model', default[1])),
                                     (('--effort', 'low'), (default[0], 'low')),
                                     (('--model', 'override-model', '--effort', 'low'),

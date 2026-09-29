@@ -1819,8 +1819,9 @@ class ApiTest(unittest.TestCase):
 
         The gate that proves no Codex model on `reference/orchestrator.md` is repeated sweeps
         live pages only and cannot see a literal in this repository's scripts, so what keeps the
-        value single-sited is that `codex_hook_config` reads it. A page whose judgment-work
-        clause no longer states a setting refuses rather than dispatching a stale one.
+        value single-sited is that `codex_hook_config` reads it: the Codex cell of the helper
+        table's ordinary-judgment row (#460). A page whose table no longer states that row
+        refuses rather than dispatching a stale one.
         """
         import tomllib
         h = module()
@@ -1834,8 +1835,8 @@ class ApiTest(unittest.TestCase):
             self.assertEqual(tomllib.loads(h.codex_hook_config(root, 'worker'))['agents'],
                              tomllib.loads(h.codex_hook_config(ROOT, 'worker'))['agents'])
 
-            renamed = page.replace('takes `gpt-6-sol` at `high`; scans',
-                                   'takes `gpt-7-vega` at `xhigh`; scans')
+            renamed = page.replace('| Ordinary judgment (research, checking) | `gpt-6-sol` at `high` |',
+                                   '| Ordinary judgment (research, checking) | `gpt-7-vega` at `xhigh` |')
             self.assertNotEqual(renamed, page)
             target.write_text(renamed)
             self.assertEqual(tomllib.loads(h.codex_hook_config(root, 'reviewer'))['agents'], {
@@ -1843,7 +1844,7 @@ class ApiTest(unittest.TestCase):
                 'default_subagent_reasoning_effort': 'xhigh',
             })
 
-            target.write_text(page.replace('On Codex, judgment work', 'On Codex, thinking work'))
+            target.write_text(page.replace('| Ordinary judgment (', '| Everyday thinking ('))
             with self.assertRaises(h.Refusal):
                 h.codex_hook_config(root, 'worker')
 

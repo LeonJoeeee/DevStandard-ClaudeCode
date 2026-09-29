@@ -476,7 +476,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
  if count==2:
   if os.environ['RACE_KIND']=='completion': Path(os.environ['RACE_COMPLETION']).write_text('0\\n')
   else:
-   rows=json.loads(c.read_text());rows[-1]['body']=rows[-1]['body'].replace('"model": "gpt-6-sol"','"model": "changed"');w(rows)
+   rows=json.loads(c.read_text());rows[-1]['body']=rows[-1]['body'].replace('"model": "gpt-6-astra"','"model": "changed"');w(rows)
 """
         (self.bin/'gh').write_text(source.replace("elif a[:2]==['issue','view']:",injection))
         counter = self.root/'view-counter'
@@ -951,7 +951,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         source=install/'reference/orchestrator.md'
         import re
         source.write_text(source.read_text().replace(
-            '| worker | `gpt-6-sol` at `high` | `opus` at `high` |',
+            '| worker | `gpt-6-astra` at `high` | `opus` at `high` |',
             '| worker | `fixture-model` at `low` | `opus` at `high` |'))
         self.script=install/'scripts/dispatch'
         run=self.start('--implementation','codex')
@@ -1316,22 +1316,64 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertEqual(self.lane_records(), [])
 
     def test_both_purposes_take_their_anchored_codex_setting(self):
-        """#406: worker and reviewer are anchored on one Codex setting, not routed by kind of work."""
+        """#406, #460: worker and reviewer are anchored on one Codex setting, Opus's equal tier."""
         worker = self.start('--implementation', 'codex')
-        self.assertEqual((worker['model'], worker['effort']), ('gpt-6-sol', 'high'))
+        self.assertEqual((worker['model'], worker['effort']), ('gpt-6-astra', 'high'))
         self.finish(worker)
         packet = self.review_packet()
         review = self.call('--purpose', 'reviewer', '--implementation', 'codex',
                            '--packet', str(packet))
         args = self.finish(review)['args']
-        self.assertEqual((review['model'], review['effort']), ('gpt-6-sol', 'high'))
-        self.assertEqual(args[args.index('-m') + 1], 'gpt-6-sol')
+        self.assertEqual((review['model'], review['effort']), ('gpt-6-astra', 'high'))
+        self.assertEqual(args[args.index('-m') + 1], 'gpt-6-astra')
         self.assertIn('model_reasoning_effort=high', args)
+
+    def test_codex_packets_carry_the_helper_table_read_from_the_page(self):
+        """#460: a Codex role is told its own helper routing, read from the page, never restated.
+
+        Neither the Codex worker nor the Codex reviewer reads `reference/orchestrator.md`, and
+        CI forbids restating a Codex model it names on another live page, so the dispatcher
+        carries the helper table's Codex column into the packet. A Claude packet does not get
+        it: its agent definitions carry the Claude column.
+        """
+        worker = self.start('--implementation', 'codex')
+        worker_prompt = self.finish(worker)['stdin']
+        packet = self.review_packet()
+        review = self.call('--purpose', 'reviewer', '--implementation', 'codex',
+                           '--packet', str(packet))
+        review_prompt = self.finish(review)['stdin']
+        for prompt in (worker_prompt, review_prompt):
+            line = next(l for l in prompt.splitlines() if l.startswith('Helpers: '))
+            self.assertIn("Codex's native subagent tool, never a Claude process", line)
+            for setting in ('`gpt-6-astra` at `high`', '`gpt-6-sol` at `high`',
+                            '`gpt-6-luna` at `max`'):
+                self.assertIn(setting, line)
+            self.assertIn('Mechanical (scans', line)
+        fixture = DispatchTest(); fixture.setUp()
+        try:
+            native = fixture.start('--implementation', 'claude')
+            self.assertNotIn('Helpers: ', Path(native['brief']).read_text())
+        finally:
+            fixture.tearDown()
+
+    def test_codex_helper_line_moves_with_the_page(self):
+        install=self.root/'plugin'
+        for directory in ('scripts', 'reference', 'hooks'):
+            shutil.copytree(SOURCE/directory, install/directory)
+        source=install/'reference/orchestrator.md'
+        text=source.read_text()
+        changed=text.replace('| `gpt-6-luna` at `max` |', '| `fixture-luna` at `low` |')
+        self.assertNotEqual(changed, text)
+        source.write_text(changed)
+        self.script=install/'scripts/dispatch'
+        prompt=self.finish(self.start('--implementation','codex'))['stdin']
+        self.assertIn('`fixture-luna` at `low`', prompt)
+        self.assertNotIn('gpt-6-luna', prompt)
 
     def test_explicit_model_and_effort_override_independently_on_each_executor(self):
         for implementation in ('codex', 'claude', 'claude-cli'):
             codex = implementation == 'codex'
-            default = ('gpt-6-sol', 'high') if codex else ('opus', 'high')
+            default = ('gpt-6-astra', 'high') if codex else ('opus', 'high')
             for flags, expected in [(('--model', 'override-model'), ('override-model', default[1])),
                                     (('--effort', 'low'), (default[0], 'low')),
                                     (('--model', 'override-model', '--effort', 'low'),
@@ -1448,8 +1490,8 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
             shutil.copytree(SOURCE/directory, install/directory)
         page = install/'reference/orchestrator.md'
         page.write_text(page.read_text().replace(
-            '| worker | `gpt-6-sol` at `high` | `opus` at `high` |',
-            '| worker | `gpt-6-sol` at `high` | ' + page_cell + ' |'))
+            '| worker | `gpt-6-astra` at `high` | `opus` at `high` |',
+            '| worker | `gpt-6-astra` at `high` | ' + page_cell + ' |'))
         self.script = install/'scripts/dispatch'
         return install
 

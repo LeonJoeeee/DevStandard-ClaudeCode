@@ -132,6 +132,16 @@ jobs:
           assert [r[0] for r in rows]==["worker","reviewer"], f"anchored rows: want one machine-readable row per role, got {rows}"
           models=sorted(set(re.findall(r"`(gpt-[^`]+)`", t)))
           assert models, "the page names no Codex model"
+          # Arbitration (#460): the PR route and the pre-PR direct invocation run one setting, and
+          # the direct one stays read-only, history-free and captured to a file.
+          packet=re.search(r"review-packet start --implementation codex --model (\S+) --effort (\S+?)`", t)
+          direct=re.search(r"^codex exec (.*)$", t, re.M)
+          assert packet and direct, "arbitration: want the review-packet route and one direct codex exec"
+          flags=direct[1].split()
+          assert "--ephemeral" in flags and "-o" in flags and flags[flags.index("-s")+1]=="read-only", \
+              "arbitration: the direct invocation must be --ephemeral, -s read-only and -o captured"
+          assert flags[flags.index("-m")+1]==packet[1] and "model_reasoning_effort='\"%s\"'"%packet[2] in flags, \
+              "arbitration: the two routes name different settings"
           for f in live:
               if f==page: continue
               text=open(f).read()

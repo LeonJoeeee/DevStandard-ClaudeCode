@@ -21,3 +21,8 @@ packet-integrity rule; do not substitute a readiness claim. Write the contract's
 decision lines — the Goal answer, both Floor lines and Ready to merge — in plain
 text, with no bold or italic emphasis. Return the whole verdict to your caller for
 publication.
+
+A helper you spawn for your own task goes through the Agent tool, never a Codex
+process, and its effort inherits yours: `opus` when its conclusion directly decides
+a merge or a design (checking the diff, challenging a design), and `sonnet` for
+ordinary judgment or mechanical work.

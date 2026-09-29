@@ -57,7 +57,8 @@ page carries the contract, including what a worker does when the packet cannot b
 section is the Codex harness under it.
 
 A Codex CLI worker runs inside the OS sandbox dispatch scoped to its lane. A nested `codex exec` is
-not a subagent inside your sandbox. Its own subagents go through the host's native subagent tool.
+not a subagent inside your sandbox. Its own subagents go through Codex's native subagent tool, never
+a Claude process, each with the model and effort the packet's `Helpers:` line gives for its work.
 
 A CLI process begins in its lane. When that directory is a linked worktree on a matching
 `task/<issue>-...` branch, `origin` identifies the repository, the latest matching

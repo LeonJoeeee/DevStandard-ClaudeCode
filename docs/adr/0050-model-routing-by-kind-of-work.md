@@ -1,6 +1,6 @@
 # 0050 — Route model and effort by kind of work, without a tier cap
 
-Status: Accepted (2026-09-09). Amends 0024 (the tier cap and mechanical-only downgrade rule) and 0040 (its restatement of the cap and uniform routing); amends 0008, 0036, 0039 and 0047 (their routing statements). Amended by 0056 (2026-09-11). Amended (2026-09-19). Amended (2026-09-20). Amended (2026-09-21). Amended (2026-09-23).
+Status: Accepted (2026-09-09). Amends 0024 (the tier cap and mechanical-only downgrade rule) and 0040 (its restatement of the cap and uniform routing); amends 0008, 0036, 0039 and 0047 (their routing statements). Amended by 0056 (2026-09-11). Amended (2026-09-19). Amended (2026-09-20). Amended (2026-09-21). Amended (2026-09-23). Amended (2026-09-29).
 
 ## Context
 
@@ -118,3 +118,28 @@ scans, triage, evidence gathering, extraction, list making and format conversion
 Every other rule the 2026-09-19 block records stands, and `reference/orchestrator.md`'s **Model
 and effort** section remains the one live record of these settings. The orchestrator's model
 stays the human's hand-made choice and is not written on the page.
+
+**Amendment (2026-09-29, issue #460):** with Claude Code the only main session (0063), the human
+re-routed every model choice on tier equivalence: Claude `opus` and Codex `gpt-6-astra` are one
+tier, Opus better and cheaper, so main work prefers Opus; Claude `sonnet` and Codex `gpt-6-sol` are
+one tier at about the same price; `gpt-6-luna` is the tier below; Claude `fable` and `haiku` are no
+longer used. Both harnesses hit quota at times, so the routing keeps both in use. The worker and
+reviewer stay anchored on Claude `opus` at `high`; their Codex cell becomes `gpt-6-astra` at `high`,
+replacing the 2026-09-23 block's `gpt-6-sol` at `high`, as the equal-tier executor a human selects and
+the disclosed re-dispatch when Claude cannot run. Arbitration is Codex `gpt-6-astra` at `max`, run
+read-only from the Claude main session through the existing Codex reviewer path (`review-packet
+start --implementation codex --model gpt-6-astra --effort max`); the pinned Codex CLI accepts that
+setting, and Claude `fable` is named nowhere live. A one-off subagent — a helper — always uses its
+own harness's built-in subagent, never the other harness, and takes its model from its work: one
+whose conclusion directly decides a merge or a design takes `opus` or `gpt-6-astra` at `high`,
+ordinary judgment `sonnet` or `gpt-6-sol` at `high`, mechanical work `sonnet` or `gpt-6-luna` at
+`max`; a Claude helper's effort still inherits its caller's. That replaces the 2026-09-19 block's
+"always `opus`" on Claude and the 2026-09-23 block's two Codex rows. Because only the orchestrator
+reads `reference/orchestrator.md`, each role is now told the rule where it already reads: the Claude
+column rides `reference/harness-claude.md` (so `agents/worker.md`'s generated body) and
+`agents/reviewer.md`, which `.github/check-agents.py` checks against the table; the Codex column is
+read from the table by `scripts/dispatch` into every Codex packet, since CI forbids restating a Codex
+model on another live page. The Codex role configuration's `agents.default_subagent_*` defaults
+follow the table's ordinary-judgment row, which keeps them at `gpt-6-sol` at `high`.
+`reference/orchestrator.md`'s **Model and effort** section remains the one live record, and every
+other rule the earlier blocks record stands.

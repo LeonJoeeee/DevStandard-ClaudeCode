@@ -600,21 +600,41 @@ def tool_decision(role, tool, arguments):
     return command_refusal(role, arguments.get('command', arguments.get('cmd', '')) or '')
 
 
-def judgment_subagent_setting(root):
-    """The Codex model and effort a dispatched role's own one-off subagent takes, from the page.
+# One helper-table row: the work, the Codex `model` at `effort` cell, then the Claude `model` cell.
+HELPER_ROW = re.compile(r'^\| ([^|`]+?) \| `([^`|]+)` at `([^`|]+)` \| `([^`|]+)` \|$', re.M)
 
-    `reference/orchestrator.md`'s **Model and effort** section states it once — the judgment-work
-    clause of its one-off-subagent paragraph, which is what `agents.default_subagent_*` below
-    configures, and not the anchored worker/reviewer row `scripts/dispatch` reads for the role
-    itself. Reading it here rather than restating it keeps the value single-sited: the CI gate
-    that proves no Codex model on that page is repeated sweeps live pages only, so a literal in
-    this script would be invisible to it (#411). A reworded clause refuses loudly instead of
-    leaving a stale model name in the dispatched configuration.
+
+def helper_settings(root):
+    """The helper table's rows as (work, Codex model, Codex effort, Claude model), from the page.
+
+    `reference/orchestrator.md`'s **Model and effort** section states the table once. A Codex
+    role never reads that page, and the CI gate that proves no Codex model on it is repeated sweeps
+    live pages only, so a literal here or on another page would go stale unseen (#411). Reading it
+    keeps the value single-sited; a table that is gone refuses rather than dispatching nothing.
     """
-    page = (Path(root) / 'reference/orchestrator.md').read_text()
-    match = re.search(r'On Codex, judgment work[^.;]*?takes `([^`]+)` at `([^`]+)`', page)
-    require(match, 'the dispatch page states no Codex judgment-work subagent setting')
-    return match[1], match[2]
+    rows = HELPER_ROW.findall((Path(root) / 'reference/orchestrator.md').read_text())
+    require(rows, 'the dispatch page states no helper table')
+    return rows
+
+
+def judgment_subagent_setting(root):
+    """The Codex default for a dispatched role's own subagent: the ordinary-judgment helper row.
+
+    That row is what `agents.default_subagent_*` below configures, not the anchored
+    worker/reviewer row `scripts/dispatch` reads for the role itself. A reworded row refuses loudly
+    instead of leaving a stale model name in the dispatched configuration.
+    """
+    rows = [row for row in helper_settings(root) if row[0].startswith('Ordinary judgment')]
+    require(len(rows) == 1, 'the dispatch page states no Codex ordinary-judgment helper setting')
+    return rows[0][1], rows[0][2]
+
+
+def codex_helper_line(root):
+    """The packet line that tells a Codex worker or reviewer its own helpers' routing (#460)."""
+    return ("Helpers: your own subagents go through Codex's native subagent tool, never a Claude "
+            "process, and each takes the model and effort its work needs — "
+            + '; '.join(f'{work}: `{model}` at `{effort}`'
+                        for work, model, effort, _ in helper_settings(root)) + '.')
 
 
 def codex_hook_config(root, role):

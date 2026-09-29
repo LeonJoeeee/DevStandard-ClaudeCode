@@ -121,6 +121,15 @@ for name, source in ROLES.items():
             f"{name}: must not route to a second installed contract"
         assert "supplied packet's filled fence is your sole judging contract" in body, \
             "reviewer: must bind the supplied contract"
+    # The Claude column of the page's helper table is restated on each Claude carrier, because
+    # neither role reads the orchestrator page (#460); a column that moves must move them too.
+    helper_models = set(re.findall(
+        r'^\| [^|`]+? \| `[^`|]+` at `[^`|]+` \| `([^`|]+)` \|$',
+        (ROOT / 'reference/orchestrator.md').read_text(), re.M))
+    assert helper_models, "the orchestrator page states no helper table"
+    carrier = parts[2].decode()
+    missing = sorted(m for m in helper_models if f"`{m}`" not in carrier)
+    assert not missing, f"{name}: body must name each Claude helper model, missing {missing}"
     binding = (f"{' + '.join(GENERATED_BODY[name])} concatenated as body"
                if name in GENERATED_BODY else f"{source} binding")
     print(f"{name}: frontmatter, no allowlist, writer denial, skills, opus alias, hook "

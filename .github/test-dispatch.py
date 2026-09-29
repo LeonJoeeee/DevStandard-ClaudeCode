@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Exercise real git and process detachment; fake GitHub and executor I/O."""
 import fcntl
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -284,7 +283,6 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
 
     def test_wait_rejects_native_and_maintenance_combinations_before_mutation(self):
         for options in [('--purpose','worker','--base','origin/main'),
-                        ('--purpose','worker','--implementation','codex-native','--base','origin/main'),
                         ('--adopt',), ('--cleanup','--discard')]:
             before = set(self.root.iterdir())
             self.assertIn('--wait', self.call(*options, '--wait', ok=False))
@@ -435,7 +433,8 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertIn('completion',self.call(*self.reconcile_options(record),ok=False))
         wrong = dict(record,brief=str(self.root/'wrong'/'brief.txt'))
         self.assertIn('exactly one',self.call(*self.reconcile_options(wrong),ok=False))
-        native = self.call(*self.continuation_options(),'--implementation','codex-native')
+        brief = self.root/'continue.txt'; brief.write_text('Complete the remaining work.')
+        native = self.call('--purpose','worker','--implementation','claude','--continue','--brief',str(brief))
         self.assertIn('CLI',self.call(*self.reconcile_options(native),ok=False))
 
     def test_reconcile_rejects_missing_evidence_and_combined_actions_without_mutation(self):
@@ -791,7 +790,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
                  body=machine_body),
         ]))
 
-        run = self.start('--implementation', 'codex-native')
+        run = self.start('--implementation', 'claude')
         packet = Path(run['brief']).read_text()
 
         self.assertIn(issue['body'], packet)
@@ -804,9 +803,9 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
     def test_only_a_codex_brief_carries_the_codex_worker_harness_mechanics(self):
         """Each family is delivered its own harness page and never the other's (ADR 0061).
 
-        Codex has no carrier that survives a lost packet — a native child gets SubagentStart and a
-        CLI child runs with `DEVSTANDARD_ROLE` set, so neither receives `reference/harness-codex.md`
-        at session start — so the brief carries its worker-facing section. Both Claude paths load
+        A Codex CLI worker has no carrier that survives a lost packet — no DevStandard startup hook
+        runs in it, only the fixed role hook — so the brief carries the worker-facing section of
+        `reference/harness-codex.md`. Both Claude paths load
         `reference/harness-claude.md` from the agent definition body instead, which is why the
         brief adds nothing there. A worker handed the other harness's mechanics would recover its
         binding through a lookup its own host cannot perform.
@@ -822,24 +821,20 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         process = self.start('--implementation', 'codex')
         process_brief = Path(process['brief']).read_text()
         self.finish(process)
-        # The same lane, continued once per executor: what differs between the three briefs is
+        # The same lane, continued on the other executor: what differs between the two briefs is
         # the implementation and nothing else.
         carry_on = self.root / 'continue.txt'
         carry_on.write_text('Continue the same lane on another executor.')
         resume = ('--purpose', 'worker', '--continue', '--brief', str(carry_on))
-        native = self.call(*resume, '--implementation', 'codex-native')
-        native_message = json.loads(Path(native['instruction']).read_text())['message']
         claude = self.call(*resume, '--implementation', 'claude')
         claude_prompt = json.loads(Path(claude['instruction']).read_text())['prompt']
 
-        for name, text in (('codex', process_brief), ('codex-native', native_message)):
-            with self.subTest(implementation=name):
-                self.assertIn(contract, text)
-                self.assertEqual(text.count(mechanics), 1)
-                self.assertNotIn(claude_page, text)
-                # Only the marked section travels: the rest of that page is host-facing and a
-                # worker must not read an orchestrator's dispatch instructions as its own.
-                self.assertNotIn(codex_page, text)
+        self.assertIn(contract, process_brief)
+        self.assertEqual(process_brief.count(mechanics), 1)
+        self.assertNotIn(claude_page, process_brief)
+        # Only the marked section travels: the rest of that page is orchestrator-facing and a
+        # worker must not read the dispatching session's instructions as its own.
+        self.assertNotIn(codex_page, process_brief)
         self.assertNotIn(mechanics, claude_prompt)
         self.assertNotIn(claude_page, claude_prompt)
         self.assertNotIn(contract, claude_prompt)
@@ -959,15 +954,9 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
             '| worker | `gpt-6-sol` at `high` | `opus` at `high` |',
             '| worker | `fixture-model` at `low` | `opus` at `high` |'))
         self.script=install/'scripts/dispatch'
-        native=self.start('--implementation','codex-native')
-        instruction=json.loads(Path(native['instruction']).read_text())
-        self.assertEqual((native['model'],native['effort']),('fixture-model','low'))
-        self.assertEqual((instruction['model'],instruction['reasoning_effort']),('fixture-model','low'))
-        continuation=self.root/'continue.txt';continuation.write_text('Continue with the configured executor.')
-        run=self.call('--purpose','worker','--continue','--implementation','codex',
-                      '--brief',str(continuation))
+        run=self.start('--implementation','codex')
         data=self.finish(run);a=data['args']
-        self.assertEqual((run['model'],run['effort']),(native['model'],native['effort']))
+        self.assertEqual((run['model'],run['effort']),('fixture-model','low'))
         self.assertEqual(a[a.index('-m')+1],'fixture-model')
         self.assertIn('model_reasoning_effort=low',a)
         self.assertIn('Co-Authored-By: Codex fixture-model low <noreply@openai.com>',data['stdin'])
@@ -1328,8 +1317,9 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
 
     def test_both_purposes_take_their_anchored_codex_setting(self):
         """#406: worker and reviewer are anchored on one Codex setting, not routed by kind of work."""
-        worker = self.start('--implementation', 'codex-native')
+        worker = self.start('--implementation', 'codex')
         self.assertEqual((worker['model'], worker['effort']), ('gpt-6-sol', 'high'))
+        self.finish(worker)
         packet = self.review_packet()
         review = self.call('--purpose', 'reviewer', '--implementation', 'codex',
                            '--packet', str(packet))
@@ -1339,8 +1329,8 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertIn('model_reasoning_effort=high', args)
 
     def test_explicit_model_and_effort_override_independently_on_each_executor(self):
-        for implementation in ('codex', 'codex-native', 'claude', 'claude-cli'):
-            codex = implementation.startswith('codex')
+        for implementation in ('codex', 'claude', 'claude-cli'):
+            codex = implementation == 'codex'
             default = ('gpt-6-sol', 'high') if codex else ('opus', 'high')
             for flags, expected in [(('--model', 'override-model'), ('override-model', default[1])),
                                     (('--effort', 'low'), (default[0], 'low')),
@@ -1352,10 +1342,9 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
                         run = fixture.start('--implementation', implementation, *flags)
                         self.assertEqual((run['model'], run['effort']), expected)
                         self.assertIn(' '.join(expected), Path(run['brief']).read_text())
-                        if implementation in ('claude', 'codex-native'):
+                        if implementation == 'claude':
                             instruction = json.loads(Path(run['instruction']).read_text())
-                            key = 'reasoning_effort' if implementation == 'codex-native' else 'effort'
-                            self.assertEqual((instruction['model'], instruction[key]), expected)
+                            self.assertEqual((instruction['model'], instruction['effort']), expected)
                         elif implementation == 'codex':
                             args = fixture.finish(run)['args']
                             self.assertEqual(args[args.index('-m') + 1], expected[0])
@@ -1386,115 +1375,35 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertEqual((instruction['model'], instruction['effort']), ('opus', 'high'))
         self.assertIn('Claude subagent, opus at high, read-only', Path(review['brief']).read_text())
 
-    def assert_native_canonical_brief(self, run):
-        instruction = json.loads(Path(run['instruction']).read_text())
-        saved = Path(run['brief']).read_bytes()
-        digest = hashlib.sha256(saved).hexdigest()
-        self.assertTrue(Path(run['brief']).is_absolute())
-        self.assertEqual(instruction.get('brief'), run['brief'])
-        self.assertEqual(instruction.get('brief_sha256'), digest)
-        self.assertEqual(run.get('brief_sha256'), digest)
-        inline = saved.decode('utf-8')
-        self.assertTrue(instruction['message'].endswith(inline))
-        preamble = instruction['message'][:-len(inline)]
-        self.assertIn(run['brief'], preamble)
-        self.assertIn(digest, preamble)
-        self.assertIn('IN FULL', preamble)
-        self.assertIn('authoritative', preamble)
-        self.assertIn('blocked', preamble)
-        self.assertTrue(inline.startswith('# Worker\n'))
-        self.assertNotIn(digest, inline)
-
-    def test_native_codex_prepares_full_worker_without_codex_cli(self):
-        self.without_detachment_tools()
-        (self.bin/'codex').unlink()
-        run = self.start('--implementation', 'codex-native')
-        self.assertEqual(run['status'], 'awaiting-agent-tool')
-        self.assertEqual(run['implementation'], 'codex-native')
-        self.assertEqual((run['model'], run['effort']), ('gpt-6-sol', 'high'))
-        self.assertFalse({'pid', 'output', 'completion'} & run.keys())
-        self.assertEqual(self.lane_records()[-1], run)
-        instruction = json.loads(Path(run['instruction']).read_text())
-        self.assertEqual(instruction['format'], 'devstandard-codex-native-v1')
-        self.assertEqual((instruction['model'], instruction['reasoning_effort']), ('gpt-6-sol', 'high'))
-        self.assertTrue(instruction['fresh_conversation'])
-        self.assertEqual(instruction['worktree'], run['worktree'])
-        self.assert_native_canonical_brief(run)
-        self.assertIn('This brief is what makes you a worker', instruction['message'])
-        self.assertIn('Produce evidence.', instruction['message'])
-        self.assertIn('Worktree: ' + run['worktree'], instruction['message'])
-        self.assertIn('Co-Authored-By: Codex native subagent', instruction['message'])
-        self.assertIn('<noreply@openai.com>', instruction['message'])
-        self.assertNotIn('subagent_type', instruction)
-        self.assertNotIn('run_in_background', instruction)
-        self.assertFalse(Path(run['brief']).with_name('command.json').exists())
-
-    def test_native_codex_reviewer_refuses_inherited_permissions_before_writes(self):
+    def test_codex_native_is_no_longer_an_implementation_and_refuses_before_writes(self):
+        """#459: Codex no longer hosts the method, so the native-worker receipt a Codex host
+        forwarded to its own spawn tool is gone. Codex stays a dispatched CLI executor,
+        `--implementation codex`, for workers and read-only gating review alike."""
         before = set(self.root.iterdir())
-        error = self.call('--purpose', 'reviewer', '--implementation', 'codex-native', ok=False)
-        self.assertIn('inherit', error)
-        self.assertIn('read-only', error)
-        self.assertIn('--implementation codex', error)
+        for purpose in ('worker', 'reviewer'):
+            with self.subTest(purpose=purpose):
+                error = self.call('--purpose', purpose, '--implementation', 'codex-native',
+                                  '--base', 'origin/main', ok=False)
+                self.assertIn("invalid choice: 'codex-native'", error)
         self.assertEqual(set(self.root.iterdir()), before)
         self.assertEqual(self.lane_records(), [])
         self.assertEqual(self.git('worktree', 'list', '--porcelain').count('worktree '), 1)
+        usage = subprocess.run([sys.executable, str(self.script), '--help'], env=self.env,
+                               text=True, capture_output=True, check=True).stdout
+        self.assertNotIn('codex-native', usage)
+        self.assertNotIn('native-spawn.json', usage)
+        self.assertIn('codex: Codex CLI process', usage)
 
-    def test_native_codex_continuation_resumes_its_handle_or_starts_fresh_in_the_same_lane(self):
-        first = self.start('--implementation', 'codex-native')
-        original = Path(first['brief']).read_bytes()
-        self.assert_native_canonical_brief(first)
-        brief = self.root/'continue.txt'
-        brief.write_text('Finish the evidence for the existing lane.')
-        options = ('--purpose', 'worker', '--implementation', 'codex-native',
-                   '--continue', '--brief', str(brief))
-        # A refused required act is the orchestrator's to perform; it then resumes the same
-        # finished native child, which answers with its context intact (#352).
-        handle = '/root/devstandard_worker'
-        # A resume stays a continuation of a native worker: it never opens a lane, and a CLI
-        # executor keeps no context to resume.
-        self.assertIn('--resume', self.call('--purpose', 'worker', '--implementation', 'codex-native',
-                                            '--base', 'origin/main', '--resume', handle, ok=False))
-        self.assertIn('--resume', self.call('--purpose', 'worker', '--implementation', 'codex',
-                                            '--continue', '--brief', str(brief), '--resume', handle, ok=False))
-        resumed = self.call(*options, '--resume', handle)
-        receipt = json.loads(Path(resumed['instruction']).read_text())
-        self.assertEqual(receipt['resume'], handle)
-        self.assertFalse(receipt['fresh_conversation'])
-        obligations = '\n'.join(receipt['native_tool_obligations'])
-        self.assertIn('send_input', obligations)
-        self.assertIn('followup_task', obligations)
-        self.assertNotIn('fork_context=false', obligations)
-        self.assertIn('follow-up', resumed['notice'])
-        self.assertIn(brief.read_text(), receipt['message'])
-        self.assert_native_canonical_brief(resumed)
-        for key in ('lane_id', 'branch', 'worktree', 'base', 'base_sha'):
-            self.assertEqual(resumed[key], first[key])
-        self.assertEqual(self.lane_records()[-1], resumed)
-        # Without a handle the same lane still continues through a fresh native child.
-        continued = self.call(*options)
-        for key in ('lane_id', 'branch', 'worktree', 'base', 'base_sha'):
-            self.assertEqual(continued[key], first[key])
-        self.assertNotEqual(continued['instruction'], first['instruction'])
-        self.assertNotEqual(continued['brief'], first['brief'])
-        self.assertNotEqual(continued['brief_sha256'], first['brief_sha256'])
-        self.assertEqual(Path(first['brief']).read_bytes(), original)
-        self.assert_native_canonical_brief(continued)
-        instruction = json.loads(Path(continued['instruction']).read_text())
-        self.assertTrue(instruction['fresh_conversation'])
-        self.assertNotIn('resume', instruction)
-        self.assertIn('fork_context=false', '\n'.join(instruction['native_tool_obligations']))
-        self.assertIn(brief.read_text(), instruction['message'])
-        self.assertEqual(self.git('worktree', 'list', '--porcelain').count('worktree '), 2)
-
-    def test_native_codex_failed_publication_returns_no_spawn_instruction(self):
-        self.env['REJECT_RUN_PUBLICATION'] = '1'
-        result = subprocess.run([sys.executable, str(self.script), '12', '--purpose', 'worker',
-            '--implementation', 'codex-native', '--base', 'origin/main', '--project', str(self.project)],
-            env=self.env, text=True, capture_output=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('fixture publication failed', result.stderr)
-        self.assertEqual(result.stdout, '')
-        self.assertEqual([row['kind'] for row in self.lane_records()], ['lane'])
+    def test_a_recorded_codex_native_run_never_blocks_its_lane(self):
+        """A lane recorded before #459 may still carry a `codex-native` run. Its handle was the
+        Codex host's own, exactly like a Claude Agent handle, so it is read as a native record:
+        it never blocks continuation or cleanup, and nothing asks for it to be alive."""
+        first = self.start('--implementation', 'claude')
+        self.replace_run(dict(first, implementation='codex-native'))
+        continued = self.call(*self.continuation_options())
+        self.assertEqual(continued['lane_id'], first['lane_id'])
+        self.finish(continued)
+        self.assertEqual(self.call('--cleanup', '--discard')['status'], 'cleaned')
 
     def test_claude_cli_launches_worker_with_full_stdin_and_preserves_denials(self):
         self.without_detachment_tools()
@@ -1766,15 +1675,14 @@ os.execv({real_git!r},[{real_git!r},*sys.argv[1:]])
     def test_a_recorded_native_handle_never_blocks_but_a_live_cli_run_still_does(self):
         """#427: `alive()` returned True for every native record unconditionally, so the removed
         attestation verified nothing. Only the CLI liveness check prevents a second writer."""
-        first=self.start('--implementation','codex-native')
+        first=self.start('--implementation','claude')
         packet=self.review_packet(identity='Claude subagent, opus at high, read-only')
         options=('--purpose','reviewer','--implementation','claude','--packet',str(packet))
         second=self.call(*options)
         self.assertNotEqual(first['instruction'],second['instruction'])
         self.assertEqual(second['status'],'awaiting-agent-tool')
         # The orchestrator's own record on the issue is the evidence a handle finished.
-        self.assertIn('Record the returned actual native handle on the issue',
-                      '\n'.join(json.loads(Path(first['instruction']).read_text())['native_tool_obligations']))
+        self.assertIn('record its returned native handle on the issue', first['notice'])
         self.env['FAKE_HOLD']=str(self.root/'release')
         running=self.call('--purpose','reviewer','--implementation','codex','--packet',str(packet))
         self.assertIn('running',self.call(*options,ok=False))

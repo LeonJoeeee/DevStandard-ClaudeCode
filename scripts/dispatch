@@ -4,7 +4,6 @@ import argparse
 from contextlib import contextmanager, nullcontext
 import errno
 import fcntl
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -24,7 +23,12 @@ from hard_edges import (codex_hook_config, api, base_advanced, round_check,
                         Refusal as GuardRefusal)
 
 MARKER = '<!-- devstandard-dispatch-v1 -->'
-NATIVE_IMPLEMENTATIONS = ('claude', 'codex-native')
+NATIVE_IMPLEMENTATIONS = ('claude',)
+# A native handle the dispatcher never observes. `codex-native` is no longer offered (#459, ADR
+# 0063): Codex stopped hosting the method, and with it the receipt a Codex host forwarded to its
+# own spawn tool. A lane recorded before then may still carry such a run, and like a Claude Agent
+# handle it was the caller's own, so it is read the same way and never blocks its lane.
+NATIVE_RECORDS = NATIVE_IMPLEMENTATIONS + ('codex-native',)
 LEGACY_LOST_ATTESTATION = 'Authoritative inspection of the originating host/environment found no executor or supervisor owned by this exact run.'
 LOST_ATTESTATION = 'Caller attests that authoritative inspection of the originating host/environment found no executor or supervisor owned by this exact run; the dispatcher has not verified that inspection.'
 
@@ -121,7 +125,7 @@ def route_setting(purpose, implementation, model=None, effort=None):
     rows = [[cell.strip() for cell in line.split('|')[1:-1]]
             for line in text.splitlines() if line.startswith('|')]
     matches = [row for row in rows if row and row[0] == purpose]
-    codex = implementation in ('codex', 'codex-native')
+    codex = implementation == 'codex'
     match = (re.fullmatch(r'`([^`]+)` at `([^`]+)`', matches[0][1 if codex else 2])
              if len(matches) == 1 and len(matches[0]) == 3 else None)
     if match is None:
@@ -185,13 +189,13 @@ def codex_worker_mechanics():
     `reference/worker.md` is the shared contract every executor gets; the mechanics of recovering a
     binding, of spawning, and of the sandbox differ per harness, so each family reads its own page
     and never the other's (ADR 0061). A Claude worker receives `reference/harness-claude.md`
-    through the agent definition body, which the harness loads as its system prompt. Codex has no
-    such carrier — a native child gets SubagentStart and a CLI child has `DEVSTANDARD_ROLE` set, so
-    neither is delivered `reference/harness-codex.md` at session start — which is why the brief
-    carries this section for `codex` and `codex-native` instead.
+    through the agent definition body, which the harness loads as its system prompt. A Codex CLI
+    worker has no such carrier — no DevStandard startup hook runs in it, only the fixed role hook
+    — which is why the brief carries this section for `codex` instead.
 
-    Only the marked worker-facing section travels. The rest of that page is host-facing: it tells
-    an orchestrator how to dispatch, and a worker must not read it as its own instruction.
+    Only the marked worker-facing section travels. The rest of that page is orchestrator-facing:
+    it tells the dispatching session how to run Codex, and a worker must not read it as its own
+    instruction.
     """
     page = (ROOT / 'reference/harness-codex.md').read_text()
     begin, end = CODEX_WORKER_MECHANICS
@@ -571,11 +575,10 @@ points here for; that page keeps the decision and the command line).
   live or uncertain executor never permits a second writer or cleanup. Re-running it overwrites
   the same comment, so state the finding you want recorded.
 
-  Native receipts. native-spawn.json (--implementation codex-native) carries the full message, the
-  fresh-conversation duty, the worktree, explicit model and effort, the absolute brief and its
-  SHA-256; --implementation claude prepares the equivalent Agent-tool instruction. The caller
-  passes the complete message to the native tool with no forked history, records the returned
-  handle, and waits natively. A prepared receipt is not a running worker.
+  Native receipts. --implementation claude prepares agent-spawn.json, the Agent-tool instruction:
+  subagent type, model, effort and the complete prompt. The caller passes it to the Agent tool,
+  records the returned handle, and is notified natively. A prepared receipt is not a running
+  worker.
 """
 
 
@@ -584,8 +587,8 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('issue', type=int)
     parser.add_argument('--purpose', choices=['worker', 'reviewer'])
-    parser.add_argument('--implementation', choices=['codex', 'claude', 'codex-native', 'claude-cli'],
-                        help='codex: CLI process; claude: native Claude Agent; codex-native: native Codex worker; claude-cli: Claude CLI worker')
+    parser.add_argument('--implementation', choices=['codex', 'claude', 'claude-cli'],
+                        help='codex: Codex CLI process; claude: native Claude Agent; claude-cli: Claude CLI worker')
     parser.add_argument('--model', help="explicit model override; otherwise use the role's anchored row")
     parser.add_argument('--effort', help="explicit effort override; otherwise use the role's anchored setting")
     parser.add_argument('--project', type=Path, default=Path.cwd(), help='target checkout, distinct from plugin installation')
@@ -597,7 +600,7 @@ def main():
     parser.add_argument('--continue', dest='continuing', action='store_true')
     parser.add_argument('--adopt', action='store_true', help='record an existing --branch and --worktree with --base; does not launch')
     parser.add_argument('--pr', type=int, help="existing lane PR on the lane's branch (required for merged cleanup)")
-    parser.add_argument('--resume', help='native worker handle to resume (Claude Agent handle, or a Codex native agent id or canonical task name); reviewers are always fresh')
+    parser.add_argument('--resume', help='native Claude Agent handle to resume; reviewers are always fresh')
     parser.add_argument('--reconcile-lost', help='exact recorded brief path; attest authoritative absence of all owned processes')
     parser.add_argument('--reason', help='reason for explicit lost-run reconciliation')
     parser.add_argument('--evidence', help='where the originating-host ownership and absence inspection is readable; recorded verbatim')
@@ -608,8 +611,6 @@ def main():
     require(args.issue > 0, 'issue must be positive')
     require(not args.wait or (args.implementation in ('codex', 'claude-cli')
             and not any((args.adopt, args.cleanup, args.reconcile_lost))), '--wait requires CLI dispatch, not native or maintenance actions')
-    require(not (args.implementation == 'codex-native' and args.purpose == 'reviewer'),
-            'native Codex reviewers inherit host permissions; an enforced read-only gating review requires --implementation codex')
     require(not (args.implementation == 'claude-cli' and args.purpose == 'reviewer'),
             'Claude CLI does not provide an enforced read-only reviewer sandbox; use --implementation codex')
     require(not args.reconcile_lost or not any((args.purpose, args.implementation, args.base, args.branch,
@@ -657,7 +658,7 @@ def main():
             # orchestrator's record on the issue is its evidence and an attestation flag would
             # only restate it (#427). The CLI check below is the one that keeps a second writer
             # off a running lane.
-            if previous.get('implementation') in NATIVE_IMPLEMENTATIONS:
+            if previous.get('implementation') in NATIVE_RECORDS:
                 continue
             require(not alive(previous), 'recorded executor still running; wait for completion')
     else:
@@ -771,11 +772,9 @@ def main():
         # definition body already delivers `reference/harness-claude.md` on both Claude paths
         # (ADR 0061).
         role = (ROOT / 'reference/worker.md').read_text()
-        if implementation in ('codex', 'codex-native'):
+        if implementation == 'codex':
             role += codex_worker_mechanics()
     identity = f'Codex {model} {effort}' if implementation == 'codex' else f'Claude {model} {effort}'
-    if implementation == 'codex-native':
-        identity = f'Codex native subagent {model} {effort}'
     packet = f"\n\n# Task packet\nIssue: {issue['url']}\nBranch: {lane['branch']}\nWorktree: {wt}\nNamed base: {lane['base']} ({lane['base_sha']})\nRole references resolve from: {ROOT}\n\n{worker_issue(issue)}\n"
     if pr:
         packet += f"PR: {pr['url']}\n"
@@ -783,7 +782,7 @@ def main():
         packet += ('\n## Continuation brief\n' if args.continuing else '\n## Inputs and expected output\n') + extra + '\n'
     packet += f'\nExecutor: {identity}. Record language: English.\n'
     if args.purpose == 'worker':
-        email = 'noreply@openai.com' if implementation in ('codex', 'codex-native') else 'noreply@anthropic.com'
+        email = 'noreply@openai.com' if implementation == 'codex' else 'noreply@anthropic.com'
         packet += f'Commit trailer: Co-Authored-By: {identity} <{email}>\nReturn the PR and evidence to the caller; never merge.\n'
         if implementation == 'claude-cli':
             packet += ('Permission policy: Claude acceptEdits with permission prompts disabled, under host permissions. '
@@ -814,8 +813,7 @@ def main():
     # The role rides the agent definition body on BOTH Claude paths — the default `claude`
     # subagent (#332) and `claude-cli`, which launches `--agent devstandard:worker` below — so
     # the brief carries the packet alone there and the page arrives exactly once (#411). It rides
-    # the brief only where no definition can carry it: `codex` and `codex-native`, and a Claude
-    # reviewer, whose judging contract is assembled per review rather than installed.
+    # the brief only where no definition can carry it: `codex`, and a Claude reviewer, whose judging contract is assembled per review rather than installed.
     # `--implementation claude-cli --purpose reviewer` is refused above; the purpose is named here
     # so this condition holds on its own terms.
     definition_carries_role = (implementation in ('claude', 'claude-cli')
@@ -833,65 +831,19 @@ def main():
     if rebase_continuation:
         record['continuation'] = 'rebase'
     if implementation in NATIVE_IMPLEMENTATIONS:
-        if implementation == 'claude':
-            instruction = dict(subagent_type=f'devstandard:{args.purpose}', model=model, effort=effort,
-                               description=f"Issue {args.issue} {args.purpose}",
-                               prompt=(f"Read {scratch / 'brief.txt'} IN FULL using Read before judging. "
-                                       "It contains the complete current contract, packet, and pinned Git evidence. "
-                                       "Return the whole verdict to the caller."
-                                       if args.purpose == 'reviewer' else prompt), run_in_background=True)
-            if args.resume:
-                instruction['resume'] = args.resume
-            path = scratch / 'agent-spawn.json'
-            notice = ('Not launched: agent-spawn.json records requested settings. Map supported controls to the Claude Agent tool, '
-                      'then record its returned native handle on the issue. If the tool has no per-spawn effort control, '
-                      'use the matching shipped-role default; a different requested effort is unsupported and must be reported, '
-                      'never silently claimed as applied. A shell cannot invoke the session Agent tool.')
-        else:
-            brief_sha256 = hashlib.sha256(Path(record['brief']).read_bytes()).hexdigest()
-            preamble = (f"Before any task work, read {record['brief']} IN FULL and verify its SHA-256 is "
-                        f"{brief_sha256}. This saved file is authoritative over the inline copy below. "
-                        "If it is missing, unreadable, incomplete, or its digest does not match, stop and "
-                        "return blocked; do not proceed from the inline copy.\n\n")
-            record['brief_sha256'] = brief_sha256
-            delivery = (
-                'Deliver the complete message as a follow-up to the recorded resume handle on the existing '
-                'native child, which answers with its context intact: multi_agent_v1 uses send_input; '
-                'collaboration uses followup_task. Do not spawn another child. '
-                'This is a semantic instruction, not Claude Agent arguments or a subprocess command.'
-                if args.resume else
-                'Use the available native Codex subagent tool with the complete message and a fresh conversation: '
-                'multi_agent_v1 uses fork_context=false; collaboration uses fork_turns="none". '
-                'This is a semantic instruction, not Claude Agent arguments or a subprocess command.')
-            settings_obligation = (
-                'The resumed child keeps the model and reasoning_effort it was spawned with; neither follow-up '
-                'tool carries those fields. If they differ from this receipt, report it; do not spawn a '
-                'replacement child silently. Host permissions and developer instructions remain inherited.'
-                if args.resume else
-                'Pass model and reasoning_effort exactly as supplied to the native tool. If the host lacks either '
-                'field or rejects these settings, report unsupported; do not substitute another model or effort. '
-                'The child still inherits host permissions and developer instructions; a fresh conversation excludes parent conversation history.')
-            handle_obligation = (
-                'The resumed child keeps the recorded handle; a handle that is closed or whose spawning session '
-                'has ended is lost, so dispatch a fresh executor instead of inventing one. Observe its return '
-                'with the host-native wait tool. '
-                if args.resume else
-                'Record the returned actual native handle on the issue and observe its return with the host-native wait tool. ')
-            instruction = dict(format='devstandard-codex-native-v1', message=preamble + prompt,
-                               brief=record['brief'], brief_sha256=brief_sha256,
-                               model=model, reasoning_effort=effort,
-                               fresh_conversation=not args.resume, worktree=str(wt),
-                               native_tool_obligations=[delivery, settings_obligation,
-                'Use the assigned worktree explicitly for every command; native spawning can retain the host working directory.',
-                handle_obligation.strip()])
-            if args.resume:
-                instruction['resume'] = args.resume
-            path = scratch / 'native-spawn.json'
-            notice = ('Not launched: caller must deliver the message in native-spawn.json as a follow-up to its '
-                      'resume handle on the existing native child, which keeps its context, and wait natively. '
-                      'Permissions and developer instructions are inherited from the host.'
-                      if args.resume else
-                      'Not launched: caller must invoke the host-native Codex subagent tool using the message, model and reasoning_effort in native-spawn.json with a fresh conversation, record its returned handle on the issue, and wait natively. Permissions and developer instructions are inherited from the host.')
+        instruction = dict(subagent_type=f'devstandard:{args.purpose}', model=model, effort=effort,
+                           description=f"Issue {args.issue} {args.purpose}",
+                           prompt=(f"Read {scratch / 'brief.txt'} IN FULL using Read before judging. "
+                                   "It contains the complete current contract, packet, and pinned Git evidence. "
+                                   "Return the whole verdict to the caller."
+                                   if args.purpose == 'reviewer' else prompt), run_in_background=True)
+        if args.resume:
+            instruction['resume'] = args.resume
+        path = scratch / 'agent-spawn.json'
+        notice = ('Not launched: agent-spawn.json records requested settings. Map supported controls to the Claude Agent tool, '
+                  'then record its returned native handle on the issue. If the tool has no per-spawn effort control, '
+                  'use the matching shipped-role default; a different requested effort is unsupported and must be reported, '
+                  'never silently claimed as applied. A shell cannot invoke the session Agent tool.')
         path.write_text(json.dumps(instruction, indent=2) + '\n')
         record.update(status='awaiting-agent-tool', instruction=str(path))
         record['notice'] = notice

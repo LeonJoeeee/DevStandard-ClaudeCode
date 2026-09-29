@@ -640,15 +640,15 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.assertEqual(len(rows), 150)
         self.assertTrue(all(row['body'] == bodies[1] for row in rows))
 
-    def bare_bump_start(self, stale_codex=False):
-        paths = ['.claude-plugin/plugin.json', '.claude-plugin/marketplace.json', '.codex-plugin/plugin.json']
+    def bare_bump_start(self, stale_marketplace=False):
+        paths = ['.claude-plugin/plugin.json', '.claude-plugin/marketplace.json']
         for path in paths:
             (self.wt / path).parent.mkdir(exist_ok=True)
             (self.wt / path).write_bytes((SOURCE / path).read_bytes())
         self.d.git('-C', str(self.wt), 'add', '.')
         self.d.git('-C', str(self.wt), 'commit', '-m', 'manifests')
         base = self.d.git('-C', str(self.wt), 'rev-parse', 'HEAD')
-        for path in paths[:2] if stale_codex else paths:
+        for path in paths[:1] if stale_marketplace else paths:
             source = (self.wt / path).read_text()
             (self.wt / path).write_text(re.sub(r'("version": ")[^"]+', r'\g<1>0.99.1', source))
         self.d.git('-C', str(self.wt), 'add', '.')
@@ -673,8 +673,8 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.assertEqual(json.loads(self.prcomments.read_text()), [])
         self.assertFalse(self.out.exists())
 
-    def test_two_manifest_bump_with_stale_codex_requires_ordinary_review(self):
-        result = self.bare_bump_start(stale_codex=True)
+    def test_one_manifest_bump_with_a_stale_marketplace_requires_ordinary_review(self):
+        result = self.bare_bump_start(stale_marketplace=True)
         self.assertEqual(result.returncode, 2)
         self.assertIn('--issue is required', result.stderr)
         self.assertNotIn('no review needed', result.stderr)

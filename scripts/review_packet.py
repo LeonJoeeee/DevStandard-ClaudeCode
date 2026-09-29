@@ -141,8 +141,8 @@ def recovery_ruling(ruling, head):
     return False
 
 
-MANIFESTS = ('.claude-plugin/plugin.json', '.claude-plugin/marketplace.json',
-             '.codex-plugin/plugin.json')
+# The synchronized release manifests: the two Claude ones since the Codex host went (#459).
+MANIFESTS = ('.claude-plugin/plugin.json', '.claude-plugin/marketplace.json')
 
 
 def pinned_git(project, env=None):

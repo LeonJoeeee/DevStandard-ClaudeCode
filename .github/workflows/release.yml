@@ -12,7 +12,6 @@ jobs:
       - uses: actions/checkout@v7
       - name: Test (the same checks CI runs gate the release)
         run: |
-          python3 .github/test-codex-plugin.py
           python3 .github/test-session-start.py
           python3 .github/check-core-budget.py
           ! grep -rn "@[a-zA-Z0-9_-]*/" reference/ --include='*.md' \
@@ -24,8 +23,7 @@ jobs:
           tag = os.environ['GITHUB_REF_NAME'].lstrip('v')
           p = json.load(open('.claude-plugin/plugin.json'))['version']
           m = json.load(open('.claude-plugin/marketplace.json'))['plugins'][0]['version']
-          c = json.load(open('.codex-plugin/plugin.json'))['version']
-          assert p == m == c == tag, f'Claude plugin={p} marketplace={m} Codex plugin={c} tag={tag}'
+          assert p == m == tag, f'Claude plugin={p} marketplace={m} tag={tag}'
           EOF
       - name: Publish GitHub release (idempotent)
         env:

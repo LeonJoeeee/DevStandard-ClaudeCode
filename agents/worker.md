@@ -128,8 +128,8 @@ for omitted requirements, unintended files, dead code, and unfinished changes.
 
 ### Execution craft
 
-DevStandard assumes superpowers is installed alongside it. These are this role's bindings; the
-Claude agent definition carries the same list and Codex receives it in this brief.
+DevStandard assumes superpowers is installed on the host running this worker. These are this role's
+bindings; the Claude agent definition carries the same list and Codex receives it in this brief.
 
 <!-- BEGIN WORKER SKILLS -->
 - `superpowers:writing-plans` — an accepted spec or a multi-step task, before touching code: plan

@@ -49,6 +49,9 @@ empty by design. The dependency, step-local sovereignty and the never-point list
 bindings. The Codex adapter maps access to those installed skills; it does not copy craft or revive
 a substance-only replacement. Dependency, step-local sovereignty and the never-point list remain.
 
-**Amendment (2026-09-29, see 0063):** 0063 removes the Codex host and its adapter. Superpowers is
-installed alongside DevStandard in Claude Code; a Codex CLI worker receives its role's skill
-bindings in the dispatch brief. Dependency, step-local sovereignty and the never-point list remain.
+**Amendment (2026-09-29, see 0063):** 0063 removes the Codex host and its adapter, not the
+dependency on either executing host. Superpowers is installed alongside DevStandard in Claude Code,
+and into Codex wherever Codex workers are dispatched: a Codex CLI worker receives its role's skill
+bindings in the dispatch brief and resolves those skills from Codex's own roots. `README.md`'s
+Install section carries the Codex commands. Dependency, step-local sovereignty and the never-point
+list remain.

@@ -17,10 +17,10 @@ The bet behind it: directing agents is the same collaboration problem humans alr
 ## Requirements
 
 - **Claude Code**, with plugin and SessionStart-hook support. It is the only main session ([ADR 0063](docs/adr/0063-claude-code-is-the-only-main-session-codex-executes-when-dispatched.md)); Codex takes part only as a dispatched CLI worker or read-only gating reviewer ([Codex executor](reference/harness-codex.md)).
-- **[superpowers](https://github.com/obra/superpowers)** — the craft layer. Install it alongside DevStandard: its role pages point to its requirements, debugging, TDD and planning skills ([ADR 0016](docs/adr/0016-superpowers-becomes-a-dependency.md)).
+- **[superpowers](https://github.com/obra/superpowers)** — the craft layer. Install it alongside DevStandard, and into Codex as well if you dispatch Codex lanes (see [Install](#install)): the role pages point to its requirements, debugging, TDD and planning skills, and each executor resolves them from its own host ([ADR 0016](docs/adr/0016-superpowers-becomes-a-dependency.md)).
 - **git**, and a **GitHub repo** for the full flow — the generated CI and release pipelines target GitHub Actions. The discipline itself works with any git hosting.
 - **Python 3.9+ and an authenticated [`gh`](https://cli.github.com/) CLI** for the shipped commands — the dispatcher, review packets and guarded merge use GitHub through `gh`. Codex process lanes support macOS and Linux using Python's detached-session support; Windows is not qualified ([dispatch guide](reference/orchestrator.md)).
-- **For Codex lanes only:** an installed, authenticated Codex CLI and, on Linux, its [sandbox prerequisites](https://learn.chatgpt.com/docs/sandboxing#prerequisites): the distribution's `bubblewrap` package and, where required, its scoped AppArmor profile.
+- **For Codex lanes only:** an installed, authenticated Codex CLI with superpowers installed into it, and, on Linux, its [sandbox prerequisites](https://learn.chatgpt.com/docs/sandboxing#prerequisites): the distribution's `bubblewrap` package and, where required, its scoped AppArmor profile.
 
 ## Install
 
@@ -42,10 +42,18 @@ claude --plugin-dir ./devstandard
 
 **Updating.** Run `claude plugin marketplace update devstandard && claude plugin update devstandard@devstandard`, then start a new session. Confirm the same way as the install check above.
 
-**Codex is not installed as a host.** Codex lanes need only the Codex CLI; the dispatcher supplies
-the role. If a release before 2.0.0 was installed into Codex, remove it with
-`codex plugin remove devstandard@devstandard`: every hook Codex has enabled runs in a dispatched
-Codex child ([Codex executor](reference/harness-codex.md)).
+**Codex lanes.** DevStandard is not installed into Codex: the dispatcher supplies a Codex worker's
+role. The worker still invokes superpowers' craft skills, and Codex finds skills only in its own
+roots, so install superpowers into Codex from its marketplace:
+
+```sh
+codex plugin marketplace add https://github.com/obra/superpowers.git
+codex plugin add superpowers@superpowers-dev
+```
+
+These command forms are checked against `codex-cli 0.153.4`. If a DevStandard release before 2.0.0
+was installed into Codex, remove it with `codex plugin remove devstandard@devstandard`: every hook
+Codex has enabled runs in a dispatched Codex child ([Codex executor](reference/harness-codex.md)).
 
 ## What you get
 

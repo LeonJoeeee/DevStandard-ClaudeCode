@@ -44,7 +44,8 @@ silences the hook in any environment.
 **Kept:** `--implementation codex` for workers and read-only gating review; its OS sandbox, the
 fixed role hook it runs under `--dangerously-bypass-hook-trust` and the orchestrator's duty to vet
 the invocation-wide hook sources that bypass reaches; MCP admission; `--wait` and the supervisor's
-lock and completion marker; `guard codex-config`; the Codex worker-mechanics section
+lock and completion marker; `guard codex-config`; superpowers installed into Codex, where a Codex
+worker's craft bindings resolve; the Codex worker-mechanics section
 `scripts/dispatch` appends to a Codex CLI brief; and the Codex executor cases of
 `test-codex-runtime.py`, which still gate the aggregate `test` check. `reference/harness-codex.md`
 stays as the page a Claude orchestrator reads for Codex CLI mechanics, plus that marked worker

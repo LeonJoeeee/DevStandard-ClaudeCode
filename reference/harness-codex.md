@@ -9,7 +9,9 @@ installed plugin root. The marked section below is the part `scripts/dispatch` h
 
 Dispatch a worker with `scripts/dispatch ... --implementation codex`, and commission a gating review
 through `scripts/review-packet start ... --implementation codex`, which uses the fresh read-only
-Codex CLI process and whole-verdict publication path. The CLI must be installed and authenticated.
+Codex CLI process and whole-verdict publication path. The CLI must be installed and authenticated,
+and a worker needs superpowers installed into Codex: its craft bindings name superpowers skills, and
+Codex resolves skills from its own roots, never from Claude Code's (`README.md`'s Install section).
 `reference/orchestrator.md`'s Dispatching to an executor section owns when Codex is chosen and its
 permission boundaries.
 

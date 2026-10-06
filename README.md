@@ -36,7 +36,7 @@ To check it took: start a new session and ask *"what does DevStandard tell you t
 Prefer to try before installing? From a shell (affects only that one session):
 
 ```bash
-git clone https://github.com/LeonJoeeee/DevStandard-ClaudeCode.git
+git clone https://github.com/LeonJoeeee/DevStandard-ClaudeCode.git devstandard
 claude --plugin-dir ./devstandard
 ```
 

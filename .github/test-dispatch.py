@@ -30,7 +30,7 @@ class DispatchTest(unittest.TestCase):
             assignment = tomllib.loads('value=' + value)
             self.assertEqual(set(assignment), {'value'})
             parsed[key] = assignment['value']
-        self.assertEqual(parsed.get('agents.default_subagent_model'), 'gpt-6-sol')
+        self.assertEqual(parsed.get('agents.default_subagent_model'), 'gpt-6.1-sol')
         self.assertEqual(parsed.get('agents.default_subagent_reasoning_effort'), 'high')
         self.assertEqual(parsed['hooks.PreToolUse'], [{
             'matcher': '.*', 'hooks': [{'type': 'command', 'command': shlex.join([
@@ -164,7 +164,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
     def start(self, *args):
         """A worker on the Codex process path, which most of these checks exercise.
 
-        The implementation is named rather than inherited: the default is `claude` and is
+        The implementation is named rather than inherited; the default is independently
         pinned by its own test below, so a flip there must not silently retarget the
         process-detachment, sandbox, git-grant and cleanup checks.
         """
@@ -476,7 +476,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
  if count==2:
   if os.environ['RACE_KIND']=='completion': Path(os.environ['RACE_COMPLETION']).write_text('0\\n')
   else:
-   rows=json.loads(c.read_text());rows[-1]['body']=rows[-1]['body'].replace('"model": "gpt-6-astra"','"model": "changed"');w(rows)
+   rows=json.loads(c.read_text());rows[-1]['body']=rows[-1]['body'].replace('"model": "gpt-6.1-sol"','"model": "changed"');w(rows)
 """
         (self.bin/'gh').write_text(source.replace("elif a[:2]==['issue','view']:",injection))
         counter = self.root/'view-counter'
@@ -951,8 +951,8 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         source=install/'reference/orchestrator.md'
         import re
         source.write_text(source.read_text().replace(
-            '| worker | `gpt-6-astra` at `high` | `opus` at `high` |',
-            '| worker | `fixture-model` at `low` | `opus` at `high` |'))
+            '| worker | `gpt-6.1-sol` at `xhigh` | `opus` at `max` |',
+            '| worker | `fixture-model` at `low` | `opus` at `max` |'))
         self.script=install/'scripts/dispatch'
         run=self.start('--implementation','codex')
         data=self.finish(run);a=data['args']
@@ -1294,39 +1294,44 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertIn('harness limit',run['notice'])
         self.assertIn('could not be enumerated',self.comments.read_text())
 
-    def test_default_implementation_is_the_hosts_own_subagent(self):
-        """#332: installed Codex no longer selects itself; the default is the host's subagent."""
+    def test_default_implementation_is_codex(self):
+        """#464: a bare dispatch starts Codex and records its actual process settings."""
         self.assertTrue(shutil.which('codex', path=str(self.bin)))
         run = self.call('--purpose', 'worker', '--base', 'origin/main')
-        self.assertEqual(run['implementation'], 'claude')
-        self.assertEqual(run['status'], 'awaiting-agent-tool')
-        self.assertNotIn('pid', run)
+        self.assertEqual(run['implementation'], 'codex')
+        self.assertEqual(run['status'], 'launched')
+        self.assertIn('pid', run)
+        self.assertEqual((run['model'], run['effort']), ('gpt-6.1-sol', 'xhigh'))
+        args = self.finish(run)['args']
+        self.assertEqual(args[args.index('-m') + 1], 'gpt-6.1-sol')
+        self.assertIn('model_reasoning_effort=xhigh', args)
         self.assertEqual([r['implementation'] for r in self.lane_records() if r['kind'] == 'run'],
-                         ['claude'])
+                         ['codex'])
 
     def test_chosen_codex_fails_plainly_when_codex_is_absent(self):
         """#332: the named executor is the one that runs — a missing Codex refuses, never falls back."""
         (self.bin/'codex').unlink()
         self.env['PATH'] = os.pathsep.join(d for d in self.env['PATH'].split(os.pathsep)
                                            if not shutil.which('codex', path=d))
-        error = self.call('--purpose', 'worker', '--base', 'origin/main',
-                          '--implementation', 'codex', ok=False)
-        self.assertIn('codex is not installed', error)
-        self.assertFalse((self.project/'.claude').exists())
-        self.assertEqual(self.lane_records(), [])
+        for flags in ((), ('--implementation', 'codex')):
+            with self.subTest(flags=flags):
+                error = self.call('--purpose', 'worker', '--base', 'origin/main', *flags, ok=False)
+                self.assertIn('codex is not installed', error)
+                self.assertFalse((self.project/'.claude').exists())
+                self.assertEqual(self.lane_records(), [])
 
     def test_both_purposes_take_their_anchored_codex_setting(self):
-        """#406, #460: worker and reviewer are anchored on one Codex setting, Opus's equal tier."""
+        """#406, #460: worker and reviewer are anchored on one Codex setting."""
         worker = self.start('--implementation', 'codex')
-        self.assertEqual((worker['model'], worker['effort']), ('gpt-6-astra', 'high'))
+        self.assertEqual((worker['model'], worker['effort']), ('gpt-6.1-sol', 'xhigh'))
         self.finish(worker)
         packet = self.review_packet()
         review = self.call('--purpose', 'reviewer', '--implementation', 'codex',
                            '--packet', str(packet))
         args = self.finish(review)['args']
-        self.assertEqual((review['model'], review['effort']), ('gpt-6-astra', 'high'))
-        self.assertEqual(args[args.index('-m') + 1], 'gpt-6-astra')
-        self.assertIn('model_reasoning_effort=high', args)
+        self.assertEqual((review['model'], review['effort']), ('gpt-6.1-sol', 'xhigh'))
+        self.assertEqual(args[args.index('-m') + 1], 'gpt-6.1-sol')
+        self.assertIn('model_reasoning_effort=xhigh', args)
 
     def test_codex_packets_carry_the_helper_table_read_from_the_page(self):
         """#460: a Codex role is told its own helper routing, read from the page, never restated.
@@ -1345,7 +1350,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         for prompt in (worker_prompt, review_prompt):
             line = next(l for l in prompt.splitlines() if l.startswith('Helpers: '))
             self.assertIn("Codex's native subagent tool, never a Claude process", line)
-            for setting in ('`gpt-6-astra` at `high`', '`gpt-6-sol` at `high`',
+            for setting in ('`gpt-6-astra` at `max`', '`gpt-6.1-sol` at `high`',
                             '`gpt-6-luna` at `max`'):
                 self.assertIn(setting, line)
             self.assertIn('Mechanical (scans', line)
@@ -1373,7 +1378,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
     def test_explicit_model_and_effort_override_independently_on_each_executor(self):
         for implementation in ('codex', 'claude', 'claude-cli'):
             codex = implementation == 'codex'
-            default = ('gpt-6-astra', 'high') if codex else ('opus', 'high')
+            default = ('gpt-6.1-sol', 'xhigh') if codex else ('opus', 'max')
             for flags, expected in [(('--model', 'override-model'), ('override-model', default[1])),
                                     (('--effort', 'low'), (default[0], 'low')),
                                     (('--model', 'override-model', '--effort', 'low'),
@@ -1405,8 +1410,8 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertEqual(run['status'],'awaiting-agent-tool')
         spawn=json.loads(Path(run['instruction']).read_text())
         self.assertEqual(spawn['subagent_type'],'devstandard:worker')
-        self.assertEqual((spawn['model'], spawn['effort']), ('opus', 'high'))
-        self.assertIn('Executor: Claude opus high', spawn['prompt'])
+        self.assertEqual((spawn['model'], spawn['effort']), ('opus', 'max'))
+        self.assertIn('Executor: Claude opus max', spawn['prompt'])
         self.assertIn('Produce evidence.',spawn['prompt'])
         self.assertNotIn('pid',run)
         self.assertNotIn('--dangerously-bypass-hook-trust',json.dumps(spawn))
@@ -1414,8 +1419,8 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         review=self.call('--purpose','reviewer','--implementation','claude','--packet',str(packet))
         instruction = json.loads(Path(review['instruction']).read_text())
         self.assertEqual(instruction['subagent_type'],'devstandard:reviewer')
-        self.assertEqual((instruction['model'], instruction['effort']), ('opus', 'high'))
-        self.assertIn('Claude subagent, opus at high, read-only', Path(review['brief']).read_text())
+        self.assertEqual((instruction['model'], instruction['effort']), ('opus', 'max'))
+        self.assertIn('Claude subagent, opus at max, read-only', Path(review['brief']).read_text())
 
     def test_codex_native_is_no_longer_an_implementation_and_refuses_before_writes(self):
         """#459: Codex no longer hosts the method, so the native-worker receipt a Codex host
@@ -1459,8 +1464,8 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         data = json.loads(result['result'])
         self.assertEqual(data['args'], ['--print', '--plugin-dir', str(SOURCE), '--agent', 'devstandard:worker',
             '--permission-mode', 'acceptEdits', '--permission-prompts', 'none', '--output-format', 'stream-json', '--verbose',
-            '--no-session-persistence', '--model', 'opus', '--effort', 'high'])
-        self.assertEqual((run['model'], run['effort']), ('opus', 'high'))
+            '--no-session-persistence', '--model', 'opus', '--effort', 'max'])
+        self.assertEqual((run['model'], run['effort']), ('opus', 'max'))
         self.assertEqual((run['permission_mode'], run['output_format']), ('acceptEdits', 'stream-json'))
         self.assertEqual(Path(run['output']).name, 'output.jsonl')
         self.assertEqual(run['sandbox'], 'host')
@@ -1475,7 +1480,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertNotIn((SOURCE/'reference/worker.md').read_text(), data['stdin'])
         self.assertNotIn('This brief is what makes you a worker', data['stdin'])
         self.assertTrue(data['stdin'].lstrip('\n').startswith('# Task packet'), data['stdin'][:80])
-        self.assertIn('Co-Authored-By: Claude opus high <noreply@anthropic.com>', data['stdin'])
+        self.assertIn('Co-Authored-By: Claude opus max <noreply@anthropic.com>', data['stdin'])
         self.assertEqual(result['permission_denials'], denials)
         self.assertEqual(events[-1]['permission_denials'], [])
         self.assertEqual(events[-1]['result'], 'Background agent finished.')
@@ -1490,8 +1495,8 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
             shutil.copytree(SOURCE/directory, install/directory)
         page = install/'reference/orchestrator.md'
         page.write_text(page.read_text().replace(
-            '| worker | `gpt-6-astra` at `high` | `opus` at `high` |',
-            '| worker | `gpt-6-astra` at `high` | ' + page_cell + ' |'))
+            '| worker | `gpt-6.1-sol` at `xhigh` | `opus` at `max` |',
+            '| worker | `gpt-6.1-sol` at `xhigh` | ' + page_cell + ' |'))
         self.script = install/'scripts/dispatch'
         return install
 
@@ -1603,7 +1608,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
                         self.assertNotIn('## Pinned Git evidence',prompt)
                     else:
                         prompt=Path(review['brief']).read_text()
-                        identity='Claude subagent, opus at high, read-only'
+                        identity='Claude subagent, opus at max, read-only'
                     self.assertIn(f'Reviewer: {identity} — reviewed',prompt)
                     self.assertIn(f'Reviewer identity: {identity}.',prompt)
                     self.assertNotIn(supplied,prompt)
@@ -1627,7 +1632,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.git('-C',str(wt),'add','.')
         self.git('-C',str(wt),'commit','-m','reviewed changes')
         head=self.git('rev-parse',run['branch'])
-        packet=self.review_packet(base,head,convention,identity='Claude subagent, opus at high, read-only')
+        packet=self.review_packet(base,head,convention,identity='Claude subagent, opus at max, read-only')
         # Neither the checkout nor a later branch tip may substitute for the pinned head.
         (wt/'guide.md').write_text('Later content must not appear.\n')
         self.git('-C',str(wt),'add','.')
@@ -1674,7 +1679,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         review=self.call('--purpose','reviewer','--implementation','claude','--packet',str(packet))
         prompt=Path(review['brief']).read_text()
         self.assertIn(quoted,prompt)
-        self.assertIn('Reviewer: Claude subagent, opus at high, read-only — reviewed',prompt)
+        self.assertIn('Reviewer: Claude subagent, opus at max, read-only — reviewed',prompt)
         spawn=json.loads(Path(review['instruction']).read_text())
         self.assertLess(len(spawn['prompt']),1000)
         self.assertIn(review['brief'],spawn['prompt'])
@@ -1688,7 +1693,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
 
     def test_claude_refuses_failed_git_evidence_before_writes(self):
         run=self.start();self.finish(run)
-        packet=self.review_packet(identity='Claude subagent, opus at high, read-only')
+        packet=self.review_packet(identity='Claude subagent, opus at max, read-only')
         real_git=shutil.which('git')
         self.tool('git',f'''import os,sys
 if '--stat' in sys.argv:
@@ -1703,7 +1708,7 @@ os.execv({real_git!r},[{real_git!r},*sys.argv[1:]])
 
     def test_claude_refuses_unpinned_or_unreachable_evidence_before_writes(self):
         run=self.start();self.finish(run)
-        good=self.review_packet(identity='Claude subagent, opus at high, read-only').read_text()
+        good=self.review_packet(identity='Claude subagent, opus at max, read-only').read_text()
         sha=self.git('rev-parse','origin/main')
         packet=self.root/'review.txt'
         for bad in ('Incomplete packet.',good.replace(sha,'origin/main'),good.replace(sha,'f'*40)):
@@ -1718,7 +1723,7 @@ os.execv({real_git!r},[{real_git!r},*sys.argv[1:]])
         """#427: `alive()` returned True for every native record unconditionally, so the removed
         attestation verified nothing. Only the CLI liveness check prevents a second writer."""
         first=self.start('--implementation','claude')
-        packet=self.review_packet(identity='Claude subagent, opus at high, read-only')
+        packet=self.review_packet(identity='Claude subagent, opus at max, read-only')
         options=('--purpose','reviewer','--implementation','claude','--packet',str(packet))
         second=self.call(*options)
         self.assertNotEqual(first['instruction'],second['instruction'])

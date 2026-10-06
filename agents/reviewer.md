@@ -3,7 +3,7 @@ name: reviewer
 description: Judge a dispatched DevStandard PR packet against its issue using the canonical review contract, returning a read-only verdict.
 disallowedTools: Write, Edit, NotebookEdit
 model: opus
-effort: high
+effort: max
 skills: []
 ---
 
@@ -25,4 +25,4 @@ publication.
 A helper you spawn for your own task goes through the Agent tool, never a Codex
 process, and its effort inherits yours: `opus` when its conclusion directly decides
 a merge or a design (checking the diff, challenging a design), and `sonnet` for
-ordinary judgment or mechanical work.
+everything else, mechanical work included.

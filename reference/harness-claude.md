@@ -14,7 +14,7 @@ contract has it validate and work in. It inherits the host's permissions and add
 own. Its own subagents go through the Agent tool, never a Codex process; the tool takes `model` per
 call and no effort, so an undefined effort inherits this session's. Spawn `opus` for a helper whose
 conclusion directly decides a merge or a design (checking a worker's diff, challenging a design), and
-`sonnet` for ordinary judgment or mechanical work.
+`sonnet` for everything else, mechanical work included.
 
 ### Recovering the binding
 

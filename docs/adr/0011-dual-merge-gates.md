@@ -1,6 +1,6 @@
 # 0011 — Two ordered merge gates: clean-context diff review, then green CI
 
-Status: Accepted (2026-07-02). Amended by 0045 (2026-09-05). Amended by 0025 (2026-08-02). Amended by 0035 (2026-08-22). Amended by 0040 (2026-08-26). Amended by 0044 (2026-09-02). Amended by 0046 (2026-09-05). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
+Status: Accepted (2026-07-02). Amended by 0045 (2026-09-05). Amended by 0025 (2026-08-02). Amended by 0035 (2026-08-22). Amended by 0040 (2026-08-26). Amended by 0044 (2026-09-02). Amended by 0046 (2026-09-05). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04).
 
 ## Context
 
@@ -99,3 +99,9 @@ a Claude Code orchestrator dispatches. The version-line exemptions cover the two
 `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, under the same byte/mode and
 ordering checks; `reference/orchestrator.md`'s Merge and rebase proof section carries the operative
 wording.
+
+**Amendment (2026-10-04, see 0064):** The 2026-09-11 issue #332 block's default reviewer is superseded: the default is the fresh
+read-only Codex CLI process; the human's instruction still selects another qualified executor.
+`reference/orchestrator.md`'s Dispatching to an executor section carries the operative wording,
+replacing the removed `reference/external-agent.md` pointer. Both ordered checks and the blocked
+rather than lowered unavailable-reviewer rule remain unchanged.

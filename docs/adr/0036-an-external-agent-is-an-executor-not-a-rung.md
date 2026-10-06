@@ -2,7 +2,7 @@
 
 Status: Amended by 0050 (2026-09-09). Accepted (2026-08-25). Amended by 0045 (2026-09-05). Amended by 0038 (2026-08-26). Amended by 0040 (2026-08-26). Amended by 0047 (2026-09-07). Amended (2026-09-07). Amended (2026-09-11). Extends 0008 (the ladder's executors; the rungs, run sizing and
 rationing are unchanged). Cites 0024 without amending it: the cap and the tier names stand for every
-agent this method spawns through its own harness, and do not reach a process it does not spawn. Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
+agent this method spawns through its own harness, and do not reach a process it does not spawn. Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04).
 
 ## Context
 
@@ -165,3 +165,9 @@ the 0045 block's exclusion applies again. Codex is the CLI executor a Claude Cod
 invokes, under its OS sandbox; the unavailable-executor fallback still keeps the gate's properties
 and never lowers them. `reference/orchestrator.md`'s Dispatching to an executor section owns these
 bindings.
+
+**Amendment (2026-10-04, see 0064):** The 2026-09-11 issue #332 block's host-subagent default is superseded: dispatched workers and
+reviewers default to Codex CLI, with the human still selecting another supported executor for one
+dispatch or standing. `reference/orchestrator.md`'s Dispatching to an executor and Model and effort
+sections carry the operative choice and settings; the removed `reference/external-agent.md`
+pointer is retired. The executor slot and fallback preserving gate properties remain unchanged.

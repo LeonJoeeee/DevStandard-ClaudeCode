@@ -59,7 +59,7 @@ Codex has enabled runs in a dispatched Codex child ([Codex executor](reference/h
 
 - **Set the result and why** — the orchestrator turns them into issues with bounds and observable done-checks. Document and review weight belongs to each task; a demo earns no automatic setup ceremony.
 - **Keep one responsive orchestrator** — Claude Code discusses, dispatches, accepts and integrates. Direct work stays small enough not to block that conversation; other concrete work goes to a worker.
-- **Run workers in parallel lanes** — one task, branch and worktree each, using Claude Code's native subagents by default. Codex CLI and Claude CLI workers are explicit choices; a Codex CLI worker runs in an OS sandbox scoped to its lane. Workers implement, rebase, prove the final state and deliver a green PR.
+- **Run workers in parallel lanes** — one task, branch and worktree each, using Codex CLI by default. Claude Code's native subagents and Claude CLI workers remain explicit choices; a Codex CLI worker runs in an OS sandbox scoped to its lane. Workers implement, rebase, prove the final state and deliver a green PR.
 - **Accept against the goal** — a clean reviewer judges a green PR under the Goal/Floor/Notes contract. Both review and CI guard integration; architecture direction and major releases remain human-owned.
 - **Load the relevant context** — the orchestrator's role reference, which carries the shared workflow with it, arrives at session start; workers receive their own role and execution craft. Other references load at their triggers.
 
@@ -86,7 +86,7 @@ short notice asks an orchestrator to re-read the page instead, because an Agent 
 fires the same hook naming no child. Runtime evidence and its limits are recorded in
 [the architecture](docs/architecture.md).
 The worker receives [`reference/worker.md`](reference/worker.md) — as its agent definition body on
-the default Claude path, in the brief on the dispatched ones — plus one task packet from the
+both Claude paths, in the brief on the default Codex path — plus one task packet from the
 [fixed dispatcher](reference/orchestrator.md). That page is the shared contract; the mechanics of
 the host it is running on come with it, from one page per executor family
 ([Claude](reference/harness-claude.md), or the worker-facing section of
@@ -128,8 +128,8 @@ the ordinary branch/PR gates still apply, with the
 **What exactly enters my context?**
 CI measures every hook output against the host's cap and proves each shipped page arrives
 whole, however many outputs it takes. The orchestrator page is delivered at session start; worker
-and reviewer context travel through dispatch, except the default Claude worker's role page, which
-is its agent definition body. A Codex worker respects existing `AGENTS.md` and explicitly reads the
+and reviewer context travel through dispatch, except the Claude worker's role pages, which form
+its agent definition body. A Codex worker respects existing `AGENTS.md` and explicitly reads the
 project's `CLAUDE.md`, which remains the method's operational-memory source.
 The [rule ledger](docs/specs/2026-09-06-core-md-rule-ledger.md) records the measurement and carrier choices.
 

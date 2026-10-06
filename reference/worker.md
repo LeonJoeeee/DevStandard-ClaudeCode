@@ -14,7 +14,7 @@ acceptance, integration, release, and teardown. The worker-side collaboration ch
 receive a brief → you work → you return a PR with evidence → the orchestrator judges and
 integrates.**
 
-**Dispatched work goes to the host's own subagent.** The human may select another supported executor
+**Dispatched work goes to Codex by default.** The human may select another supported executor
 for one task or standing until their next instruction. Codex runs as a CLI process under
 `reference/harness-codex.md`; process workers receive the same role in their brief. The executor
 changes the carrier, not this authority boundary — in the dispatch brief, or as the Claude agent

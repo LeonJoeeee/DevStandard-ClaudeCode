@@ -174,9 +174,9 @@ page.
 Use the installed plugin's fixed dispatcher (Python 3.9+, `git`, authenticated `gh`) from the target
 checkout; it assembles the whole brief from the issue's ordered record and the current role source.
 
-**Dispatched work goes to the host's own subagent.** The human's instruction selects another
+**Dispatched work goes to Codex by default.** The human's instruction selects another
 supported executor for one dispatch or standing until their next instruction. The choice lives with
-the orchestrator, not in a project file. The default is `--implementation claude`; Codex runs as a
+the orchestrator, not in a project file. The default is `--implementation codex`; Codex runs as a
 CLI process, `--implementation codex`, for a worker or an independent read-only gating reviewer
 under `reference/harness-codex.md`. Claude CLI is an explicit worker process, not a qualified gating
 reviewer. Native workers inherit host permissions; Codex CLI workers receive an OS sandbox scoped to
@@ -200,21 +200,20 @@ gate's properties—gating review or a design challenge—that gate is blocked, 
 #### Model and effort
 
 The method has three agents. The human picks the orchestrator's model by hand. The worker and the
-reviewer are anchored: model and effort are fixed for the role, not routed per task. Claude `opus`
-and Codex `gpt-6-astra` are one tier, as are Claude `sonnet` and Codex `gpt-6-sol`; `gpt-6-luna` is
-the tier below.
+reviewer are anchored: model and effort are fixed for the role, not routed per task. Codex's tier
+order is `gpt-6-astra` above `gpt-6.1-sol` above `gpt-6-sol`, with `gpt-6-luna` cheapest; the Claude
+Code side names only tier aliases, whose model resolution belongs to the host.
 
 | Role | Codex | Claude |
 |---|---|---|
-| worker | `gpt-6-astra` at `high` | `opus` at `high` |
-| reviewer | `gpt-6-astra` at `high` | `opus` at `high` |
+| worker | `gpt-6.1-sol` at `xhigh` | `opus` at `max` |
+| reviewer | `gpt-6.1-sol` at `xhigh` | `opus` at `max` |
 
-`scripts/dispatch` reads those two rows, so keep the cell form. The Codex column is the equal-tier
-executor a human selects, and the disclosed re-dispatch (When it is not there) when Claude is
-missing, erroring or out of quota. Arbitration — a genuine dilemma, an irreversible judgment, an
-architecture-level acceptance — takes Codex `gpt-6-astra` at `max`, read-only from this session. It
-informs the decision and does not make it: a genuine dilemma or irreversible judgment still goes to
-the human (the stuck-work ladder below). With a PR, commission it through the Codex reviewer path:
+`scripts/dispatch` reads those two rows, so keep the cell form. Arbitration — a genuine dilemma,
+an irreversible judgment, an architecture-level acceptance — takes Codex `gpt-6-astra` at `max`,
+read-only from this session. It informs the decision and does not make it: a genuine dilemma or
+irreversible judgment still goes to the human (the stuck-work ladder below). With a PR, commission
+it through the Codex reviewer path:
 `review-packet start --implementation codex --model gpt-6-astra --effort max`. Before a PR exists,
 run a fresh, history-free Codex process from the checkout with the question and its evidence on
 stdin, and post the captured answer on the issue as the durable record:
@@ -223,20 +222,25 @@ stdin, and post the captured answer on the issue as the durable record:
 codex exec --ephemeral -s read-only -m gpt-6-astra -c model_reasoning_effort='"max"' -o <session-scratch>/answer.md - < <session-scratch>/question.md
 ```
 
+When Codex is out of quota, arbitration falls back to the built-in Claude `fable` with session
+effort `max`. This adds no arbitration tier; the fresh, independent, read-only contract still
+applies, and the answer is published on the issue or PR.
+
 A helper — a one-off subagent any role spawns for its own task — is neither anchored role and never
 goes through `scripts/dispatch` or `scripts/review-packet`. It always uses its own harness's
 built-in subagent, never the other harness's, with the model its work takes:
 
 | Helper's work | Codex | Claude |
 |---|---|---|
-| Its conclusion directly decides a merge or a design (checking a worker's diff, challenging a design) | `gpt-6-astra` at `high` | `opus` |
-| Ordinary judgment (research, checking) | `gpt-6-sol` at `high` | `sonnet` |
+| Its conclusion directly decides a merge or a design (checking a worker's diff, challenging a design) | `gpt-6-astra` at `max` | `opus` |
+| **The default — everything else** | `gpt-6.1-sol` at `high` | `sonnet` |
 | Mechanical (scans, first-pass triage, evidence gathering, fixed-field extraction, lists, format conversion) | `gpt-6-luna` at `max` | `sonnet` |
 
 A Claude helper's effort inherits its caller's. Each role is told this where it already reads:
 `reference/harness-claude.md` and `agents/reviewer.md` carry the Claude column, and dispatch reads
-the Codex column into a Codex packet and sets Codex's default subagent to the ordinary-judgment row,
-so keep this table's cell form too.
+the Codex column into a Codex packet and sets Codex's default subagent to the closing-default row,
+which applies unless its conclusion decides a merge or a design, or its work is mechanical. Keep
+this table's cell form too.
 
 Bulk repetitive work — building a retrieval index or a knowledge graph, batch extraction and
 tagging — is not agent work: run a script against a cheap model endpoint, named in the needing

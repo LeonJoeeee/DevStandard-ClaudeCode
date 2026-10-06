@@ -1,6 +1,6 @@
 # 0009 — Position DevBook as the GitHub flow extended to agent teams; the outer layer stays
 
-Status: Accepted (2026-07-01). Amended by 0015 (2026-07-09). Amended (2026-09-07). Amended (2026-09-11).
+Status: Accepted (2026-07-01). Amended by 0015 (2026-07-09). Amended (2026-09-07). Amended (2026-09-11). Amended by 0064 (2026-10-04).
 
 ## Context
 
@@ -44,3 +44,9 @@ the human's instruction — for one dispatch, or standing until their next — s
 (0040's 2026-09-11 amendment; `reference/external-agent.md`, "When a subagent, when Codex"). What
 that block protects is untouched — one task = one branch = one worktree, and purpose × implementation
 as the replacement for the retired rung; only which implementation is presumed has changed.
+
+**Amendment (2026-10-04, see 0064):** The 2026-09-11 block's dispatch default is superseded: Codex CLI is the default worker and
+reviewer executor, and the human's instruction selects another supported executor for one dispatch
+or standing. `reference/orchestrator.md`'s Dispatching to an executor section now carries the
+operative wording, replacing the removed `reference/external-agent.md` pointer. One task, branch
+and worktree and the purpose × implementation construct remain unchanged.

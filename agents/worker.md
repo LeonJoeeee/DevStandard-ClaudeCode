@@ -2,7 +2,7 @@
 name: worker
 description: Execute one dispatched DevStandard issue in its assigned branch and worktree, returning a PR with done-check evidence.
 model: opus
-effort: high
+effort: max
 hooks:
   PreToolUse:
     - matcher: ".*"
@@ -31,7 +31,7 @@ acceptance, integration, release, and teardown. The worker-side collaboration ch
 receive a brief → you work → you return a PR with evidence → the orchestrator judges and
 integrates.**
 
-**Dispatched work goes to the host's own subagent.** The human may select another supported executor
+**Dispatched work goes to Codex by default.** The human may select another supported executor
 for one task or standing until their next instruction. Codex runs as a CLI process under
 `reference/harness-codex.md`; process workers receive the same role in their brief. The executor
 changes the carrier, not this authority boundary — in the dispatch brief, or as the Claude agent
@@ -251,7 +251,7 @@ contract has it validate and work in. It inherits the host's permissions and add
 own. Its own subagents go through the Agent tool, never a Codex process; the tool takes `model` per
 call and no effort, so an undefined effort inherits this session's. Spawn `opus` for a helper whose
 conclusion directly decides a merge or a design (checking a worker's diff, challenging a design), and
-`sonnet` for ordinary judgment or mechanical work.
+`sonnet` for everything else, mechanical work included.
 
 ### Recovering the binding
 

@@ -1,7 +1,7 @@
 # 0060 — The agent definition body carries the worker role
 
 Status: Accepted (2026-09-15). Amends 0059 (its Decision's carrier sentence for the default
-Claude Agent path). Amended by 0061 (2026-09-19). Amended (2026-09-20). Amended by 0063 (2026-09-29).
+Claude Agent path). Amended by 0061 (2026-09-19). Amended (2026-09-20). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04).
 
 **Scope: this ADR decides what the method ships.** It decides what carries a worker its role on
 each host (#402); `reference/worker.md` carries the operative wording, and this record carries the
@@ -99,3 +99,9 @@ unchanged, and so is the Codex half of the map.
 **Amendment (2026-09-29, see 0063):** 0063 removes `codex-native`. Only `--implementation codex`
 takes the role from the brief — `reference/worker.md` plus the marked worker section of
 `reference/harness-codex.md`; both Claude paths take it from the definition body.
+
+**Amendment (2026-10-04, see 0064):** The Consequences' "default Claude path" is now the explicit Claude path: Codex CLI is the
+default executor under 0064. The current carrier map in the 0063 block is unchanged: the Codex
+brief carries the shared role plus its Codex mechanics, and both Claude paths take the shared
+role and Claude mechanics from the generated definition body. The generator and byte-identity
+checks are unchanged.

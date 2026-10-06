@@ -1,6 +1,6 @@
 # 0050 — Route model and effort by kind of work, without a tier cap
 
-Status: Accepted (2026-09-09). Amends 0024 (the tier cap and mechanical-only downgrade rule) and 0040 (its restatement of the cap and uniform routing); amends 0008, 0036, 0039 and 0047 (their routing statements). Amended by 0056 (2026-09-11). Amended (2026-09-19). Amended (2026-09-20). Amended (2026-09-21). Amended (2026-09-23). Amended (2026-09-29).
+Status: Accepted (2026-09-09). Amends 0024 (the tier cap and mechanical-only downgrade rule) and 0040 (its restatement of the cap and uniform routing); amends 0008, 0036, 0039 and 0047 (their routing statements). Amended by 0056 (2026-09-11). Amended (2026-09-19). Amended (2026-09-20). Amended (2026-09-21). Amended (2026-09-23). Amended (2026-09-29). Amended by 0064 (2026-10-04).
 
 ## Context
 
@@ -147,3 +147,15 @@ model on another live page. The Codex role configuration's `agents.default_subag
 follow the table's ordinary-judgment row, which keeps them at `gpt-6-sol` at `high`.
 `reference/orchestrator.md`'s **Model and effort** section remains the one live record, and every
 other rule the earlier blocks record stands.
+
+**Amendment (2026-10-04, see 0064):** The 2026-09-29 block's anchored Codex cell and its tier-equivalence basis are superseded. The
+worker and reviewer take Codex `gpt-6.1-sol` at `xhigh` or Claude `opus` at `max`; the method names
+Codex models and host-resolved Claude tier aliases without asserting cross-harness equivalence.
+Under the 2026-10-06 ruling the decision-critical Codex helper takes `gpt-6-astra` at `max`, and
+the middle helper row becomes the closing default — everything else — `gpt-6.1-sol` at `high`,
+including demanding work that decides neither a merge nor a design. Mechanical Codex work and
+the Claude helper column are unchanged. The Codex role configuration's `agents.default_subagent_*`
+now consumes that closing-default row, retaining refusal when it is missing or ambiguous.
+Arbitration keeps Codex `gpt-6-astra` at `max`, with built-in Claude `fable` at `max` as its quota
+fallback, not another tier; the old block's "`fable` is named nowhere live" no longer holds.
+`reference/orchestrator.md`'s **Model and effort** section remains the one live record.

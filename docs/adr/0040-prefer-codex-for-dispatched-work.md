@@ -12,7 +12,7 @@ by dating and single-siting the setting, not by refusing to write it. Amends 003
 reviewer — with the read-only Codex run as its executor where installed), 0038 (its Claude-side
 "defaults to Codex" sentence becomes the harness-neutral rung-2 rule) and 0034 (its "moves into a
 subagent" trigger reads as any out-of-context helper, a process included). Cites 0008 (the
-ladder's rungs are unchanged). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
+ladder's rungs are unchanged). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04).
 
 *This ADR changes what DevStandard ships — a routing preference and a standing setting on the pages
 every seeded project reads — so a reader in a seeded project should take it as method.*
@@ -141,3 +141,11 @@ human-selected CLI executor for workers and read-only gating review, and the Cod
 setting applies to that path alone. `reference/orchestrator.md`'s Dispatching to an executor section
 owns routing; `reference/harness-codex.md` maps the CLI executor, not a Codex session dispatching
 within its own harness.
+
+**Amendment (2026-10-04, see 0064):** The 2026-09-11 block's reversal of the executor preference is reversed: Codex is the default again
+for workers and reviewers, including the independent `scripts/review-packet` default. The human's
+instruction still selects another supported executor for one dispatch or standing; the
+unavailable-executor rule still preserves gate properties or blocks. The 2026-09-29 block's
+Claude-native default is superseded likewise. `reference/external-agent.md`, named by the old
+blocks, was removed by 0059; the operative wording now lives in `reference/orchestrator.md`'s
+Dispatching to an executor section, with executor mechanics on `reference/harness-codex.md`.

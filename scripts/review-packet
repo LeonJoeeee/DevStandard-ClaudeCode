@@ -270,7 +270,7 @@ def assemble(args, project, repo, pr, issue, history):
         require(any(accepted in text for text in [issue['body'], *[c['body'] for c in issue['comments']]]),
                 'accepted spec SHA was not published on the issue')
         require(git(project, 'cat-file', '-t', accepted) == 'blob', 'accepted spec is not a reachable blob')
-    implementation = args.implementation or 'claude'  # the host's own subagent (#332)
+    implementation = args.implementation or 'codex'  # the anchored roles' default executor (#464)
     model, effort = dispatch.route_setting('reviewer', implementation, args.model, args.effort)
     identity = (f'Codex, {model} at {effort}, read-only' if implementation == 'codex'
                 else f'Claude subagent, {model} at {effort}, read-only')

@@ -549,7 +549,7 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
 
     def test_start_forwards_independent_model_and_effort_overrides(self):
         for implementation in ('codex', 'claude'):
-            default = ('gpt-6-astra', 'high') if implementation == 'codex' else ('opus', 'high')
+            default = ('gpt-6.1-sol', 'xhigh') if implementation == 'codex' else ('opus', 'max')
             for flags, expected in [(('--model', 'override-model'), ('override-model', default[1])),
                                     (('--effort', 'low'), (default[0], 'low')),
                                     (('--model', 'override-model', '--effort', 'low'),
@@ -730,14 +730,14 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
                 self.assertEqual(json.loads(self.prcomments.read_text()), [])
                 self.assertIn('full SHA' if sha == 'deadbeef' else sha, result.stderr)
 
-    def test_assembled_reviewer_defaults_to_the_hosts_own_subagent(self):
-        """#332: the assembler picks the same default the dispatcher does, Codex installed or not."""
+    def test_assembled_reviewer_defaults_to_codex(self):
+        """#464: the assembler independently selects Codex and pins that reviewer identity."""
         self.assertTrue(shutil.which('codex', path=str(self.d.bin)))
         result=self.assemble()
-        self.assertEqual(result['implementation'],'claude')
-        self.assertEqual(result['identity'],'Claude subagent, opus at high, read-only')
+        self.assertEqual(result['implementation'],'codex')
+        self.assertEqual(result['identity'],'Codex, gpt-6.1-sol at xhigh, read-only')
         packet=json.loads(Path(result['packet']).read_text())
-        self.assertEqual(packet['slots']['REVIEWER_IDENTITY'],'Claude subagent, opus at high, read-only')
+        self.assertEqual(packet['slots']['REVIEWER_IDENTITY'],'Codex, gpt-6.1-sol at xhigh, read-only')
 
     def test_rendered_packet_carries_the_open_ended_goal_clauses(self):
         # Both reviewer paths read this rendered brief and nothing else, so the #313 clauses reach
@@ -1428,7 +1428,7 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         pr=json.loads(self.prfile.read_text());pr['headRefOid']='f'*40;self.prfile.write_text(json.dumps(pr))
         # Native return is supplied whole by the caller; it must retain the pinned reviewer identity.
         self.verdict.write_text(re.sub(r'^Reviewer: .*? — reviewed',
-            'Reviewer: Claude subagent, opus at high, read-only — reviewed',self.verdict.read_text()))
+            'Reviewer: Claude subagent, opus at max, read-only — reviewed',self.verdict.read_text()))
         self.call('publish','--attempt',str(result['attempt']),'--verdict',str(self.verdict))
         self.assertTrue(self.published()[-1]['body'].endswith(self.verdict.read_text()))
         self.assertEqual(self.call('status')['next'],'full-review')

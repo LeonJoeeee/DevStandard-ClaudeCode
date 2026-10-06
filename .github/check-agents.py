@@ -2,7 +2,7 @@
 
 `agents/worker.md` is hand-authored frontmatter plus a GENERATED body, because the Claude harness
 loads an agent definition's body as the subagent's system prompt, and that is what carries the role
-on the default `--implementation claude` path without a read (ADR 0060).
+on the explicit `--implementation claude` path without a read (ADR 0060).
 
 **The concatenation rule: the worker's body is the exact bytes of `reference/worker.md` followed by
 the exact bytes of `reference/harness-claude.md`, in that order, with nothing between them.** The

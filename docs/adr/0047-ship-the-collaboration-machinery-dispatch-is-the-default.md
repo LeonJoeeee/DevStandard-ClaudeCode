@@ -2,7 +2,7 @@
 
 Status: Amended by 0050 (2026-09-09). Accepted (2026-09-07). Supersedes 0006 and 0008. Amends 0015 (its executor and
 conflict-handling points), 0036 and 0040 (their rung vocabulary, which now names a retired
-ladder). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended (2026-09-20). Amended by 0063 (2026-09-29).
+ladder). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended (2026-09-20). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04).
 
 *This ADR changes what DevStandard ships — executable scripts, hooks and agent definitions inside
 the installed plugin, and a different default for who does the work — so a reader in a seeded
@@ -122,3 +122,8 @@ operative wording.
 Dispatch runs from a Claude Code orchestrator; Codex is the `--implementation codex` CLI executor.
 Dispatch-first execution, issue/branch/worktree lanes, review accounting and the refusal to bundle
 per-task workflows are unchanged.
+
+**Amendment (2026-10-04, see 0064):** The 2026-09-11 default-executor reversal is reversed by 0064: Codex CLI is the default worker
+and reviewer executor, while the human's instruction still selects another supported executor.
+`reference/orchestrator.md`'s Dispatching to an executor section carries the operative wording.
+Dispatch-first execution, isolated lanes and review accounting are unchanged.

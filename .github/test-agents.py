@@ -23,8 +23,8 @@ class AgentEffortTest(unittest.TestCase):
             original = worker.read_text()
             for case, contents, succeeds in (
                 ('matching', original, True),
-                ('mismatched', original.replace('effort: high', 'effort: low', 1), False),
-                ('missing', original.replace('effort: high\n', '', 1), False),
+                ('mismatched', original.replace('effort: max', 'effort: low', 1), False),
+                ('missing', original.replace('effort: max\n', '', 1), False),
             ):
                 with self.subTest(case=case):
                     worker.write_text(contents)

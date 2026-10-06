@@ -1801,6 +1801,28 @@ class RoundCliTest(AcceptanceTest):
 
 
 class ApiTest(unittest.TestCase):
+    def test_codex_closing_default_requires_exactly_one_helper_row(self):
+        """#464: Markdown emphasis cannot hide the default, and ambiguity must refuse."""
+        h = module()
+        import tomllib
+        default = '| **The default — everything else** | `fixture-default` at `high` | `sonnet` |\n'
+        mechanical = '| Mechanical | `fixture-mechanical` at `max` | `sonnet` |\n'
+        with tempfile.TemporaryDirectory(prefix='codex-default-row-') as directory:
+            root = Path(directory)
+            (root / 'reference').mkdir()
+            page = root / 'reference/orchestrator.md'
+            for row in (default, default.replace('**', '')):
+                page.write_text(row + mechanical)
+                self.assertEqual(tomllib.loads(h.codex_hook_config(root, 'worker'))['agents'], {
+                    'default_subagent_model': 'fixture-default',
+                    'default_subagent_reasoning_effort': 'high',
+                })
+            for rows in (mechanical, default + default + mechanical):
+                page.write_text(rows)
+                for role in ('worker', 'reviewer'):
+                    with self.subTest(rows=rows, role=role), self.assertRaises(h.Refusal):
+                        h.codex_hook_config(root, role)
+
     def test_codex_config_sets_judgment_subagent_defaults_for_both_roles(self):
         import tomllib
         for role in ('worker', 'reviewer'):
@@ -1810,7 +1832,7 @@ class ApiTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 config = tomllib.loads(result.stdout)
                 self.assertEqual(config.get('agents'), {
-                    'default_subagent_model': 'gpt-6-sol',
+                    'default_subagent_model': 'gpt-6.1-sol',
                     'default_subagent_reasoning_effort': 'high',
                 })
 
@@ -1820,7 +1842,7 @@ class ApiTest(unittest.TestCase):
         The gate that proves no Codex model on `reference/orchestrator.md` is repeated sweeps
         live pages only and cannot see a literal in this repository's scripts, so what keeps the
         value single-sited is that `codex_hook_config` reads it: the Codex cell of the helper
-        table's ordinary-judgment row (#460). A page whose table no longer states that row
+        table's closing-default row (#464). A page whose table no longer states that row
         refuses rather than dispatching a stale one.
         """
         import tomllib
@@ -1835,8 +1857,8 @@ class ApiTest(unittest.TestCase):
             self.assertEqual(tomllib.loads(h.codex_hook_config(root, 'worker'))['agents'],
                              tomllib.loads(h.codex_hook_config(ROOT, 'worker'))['agents'])
 
-            renamed = page.replace('| Ordinary judgment (research, checking) | `gpt-6-sol` at `high` |',
-                                   '| Ordinary judgment (research, checking) | `gpt-7-vega` at `xhigh` |')
+            renamed = page.replace('| **The default — everything else** | `gpt-6.1-sol` at `high` |',
+                                   '| **The default — everything else** | `gpt-7-vega` at `xhigh` |')
             self.assertNotEqual(renamed, page)
             target.write_text(renamed)
             self.assertEqual(tomllib.loads(h.codex_hook_config(root, 'reviewer'))['agents'], {
@@ -1844,7 +1866,7 @@ class ApiTest(unittest.TestCase):
                 'default_subagent_reasoning_effort': 'xhigh',
             })
 
-            target.write_text(page.replace('| Ordinary judgment (', '| Everyday thinking ('))
+            target.write_text(page.replace('| **The default — everything else** |', '| Unclassified work |'))
             with self.assertRaises(h.Refusal):
                 h.codex_hook_config(root, 'worker')
 

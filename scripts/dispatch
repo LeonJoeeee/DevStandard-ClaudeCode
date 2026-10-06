@@ -723,7 +723,7 @@ def main():
             publish(project, repo, args.issue, lane, Path(scratch))
         print(json.dumps(lane, indent=2))
         return
-    implementation = args.implementation or 'claude'  # the host's own subagent (#332)
+    implementation = args.implementation or 'codex'  # the anchored roles' default executor (#464)
     require(not args.resume or implementation in NATIVE_IMPLEMENTATIONS, '--resume is only for native workers; CLI executors start fresh')
     if args.continuing:
         require(args.brief, '--continue requires --brief')
@@ -814,7 +814,7 @@ def main():
             rebase=base_advanced(repo, pr['baseRefName'], pr['headRefOid']))['rebase']
     # All input and role validation is finished. From here onward writes are deliberate.
     scratch = Path(tempfile.mkdtemp(prefix=f'devstandard-{args.issue}-{args.purpose}-'))
-    # The role rides the agent definition body on BOTH Claude paths — the default `claude`
+    # The role rides the agent definition body on BOTH Claude paths — the native `claude`
     # subagent (#332) and `claude-cli`, which launches `--agent devstandard:worker` below — so
     # the brief carries the packet alone there and the page arrives exactly once (#411). It rides
     # the brief only where no definition can carry it: `codex`, and a Claude reviewer, whose judging contract is assembled per review rather than installed.

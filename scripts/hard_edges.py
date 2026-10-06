@@ -618,14 +618,14 @@ def helper_settings(root):
 
 
 def judgment_subagent_setting(root):
-    """The Codex default for a dispatched role's own subagent: the ordinary-judgment helper row.
+    """The Codex default for a dispatched role's own subagent: the closing-default helper row.
 
     That row is what `agents.default_subagent_*` below configures, not the anchored
     worker/reviewer row `scripts/dispatch` reads for the role itself. A reworded row refuses loudly
     instead of leaving a stale model name in the dispatched configuration.
     """
-    rows = [row for row in helper_settings(root) if row[0].startswith('Ordinary judgment')]
-    require(len(rows) == 1, 'the dispatch page states no Codex ordinary-judgment helper setting')
+    rows = [row for row in helper_settings(root) if row[0].strip('*').startswith('The default —')]
+    require(len(rows) == 1, 'the dispatch page must state exactly one Codex closing-default helper setting')
     return rows[0][1], rows[0][2]
 
 

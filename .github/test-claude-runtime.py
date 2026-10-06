@@ -139,7 +139,7 @@ def role_page_carrier(host_text, role, case, log_dir):
 
     `scripts/dispatch` reads `reference/worker.md` into the brief only where no definition can
     carry it — `codex`. Both Claude paths send the task packet alone: the
-    DEFAULT `--implementation claude` since #332, and `--implementation claude-cli` since #411,
+    native `--implementation claude`, and `--implementation claude-cli` since #411,
     which ran `--agent devstandard:worker` and prepended the page as well until then. Until #402
     the definition carried no role text either, only the source path and an IN FULL read
     instruction, which this helper recorded honestly as an UNPROVEN carrier because a
@@ -546,7 +546,7 @@ def dispatch_cli(binary, log_dir, native_background=False):
                 require(not any(row.get('tool_use_id') == required_id
                                 for row in results[-1].get('permission_denials', [])),
                         'fixture did not exercise a later result without the earlier denial')
-            require(all(row.get('output_config', {}).get('effort') == 'high'
+            require(all(row.get('output_config', {}).get('effort') == 'max'
                         for row in fixture.requests), 'dispatched effort did not reach model API')
             return {'role': label, 'requests': len(fixture.requests),
                     'execution': 'real detached Claude CLI', 'result_events': len(results),

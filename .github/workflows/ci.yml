@@ -107,11 +107,11 @@ jobs:
           done
           # positive invariants
           grep -q "operational-memory file on every harness" reference/repo-claude-md.md
-          # 0040 as amended 2026-09-11 (#332): the executor default is the host's own subagent.
+          # 0040 as amended by 0064 (#464): the executor default is Codex.
           # The gate still asserts the method states a default; the sentence it asserts is the
           # current one, and it is carried by each self-contained role page (ADR 0059).
           for page in reference/orchestrator.md reference/worker.md; do
-            grep -q "Dispatched work goes to the host's own subagent" "$page"
+            grep -q "Dispatched work goes to Codex by default" "$page"
           done
           # 0040/0050 as amended 2026-09-19 (#406): the dated standing record is replaced by the anchored
           # worker and reviewer rows. They are stated once, on the dispatch page, in the cell form

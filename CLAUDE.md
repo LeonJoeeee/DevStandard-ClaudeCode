@@ -118,7 +118,7 @@ python3 .github/check-adr-index.py
 # 5. NOT a CI gate — before merging a PR needing check 1 (see Version bumps below):
 #    Counting all comments passes on a CI-FALLBACK block or a bot note, so match the verdict itself.
 PR=<number>
-test "$(gh api "repos/LeonJoeeee/devstandard/issues/$PR/comments" \
+test "$(gh api "repos/LeonJoeeee/DevStandard-ClaudeCode/issues/$PR/comments" \
   --jq '[.[] | select(.body | test("[Mm]erge check 1"))] | length')" -ge 1
 #    Matches the heading reference/code-review-prompt.md prescribes and scripts/review-packet now
 #    emits for every returned verdict, so coverage is guaranteed rather than coincidental since #203.

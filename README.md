@@ -1,7 +1,7 @@
 # DevStandard
 
-[![CI](https://github.com/LeonJoeeee/devstandard/actions/workflows/ci.yml/badge.svg)](https://github.com/LeonJoeeee/devstandard/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/LeonJoeeee/devstandard)](https://github.com/LeonJoeeee/devstandard/releases)
+[![CI](https://github.com/LeonJoeeee/DevStandard-ClaudeCode/actions/workflows/ci.yml/badge.svg)](https://github.com/LeonJoeeee/DevStandard-ClaudeCode/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/LeonJoeeee/DevStandard-ClaudeCode)](https://github.com/LeonJoeeee/DevStandard-ClaudeCode/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **The GitHub flow, extended to agent teams.**
@@ -27,7 +27,7 @@ The bet behind it: directing agents is the same collaboration problem humans alr
 **Claude Code.** Inside a session, run:
 
 ```
-/plugin marketplace add LeonJoeeee/devstandard
+/plugin marketplace add LeonJoeeee/DevStandard-ClaudeCode
 /plugin install devstandard@devstandard
 ```
 
@@ -36,7 +36,7 @@ To check it took: start a new session and ask *"what does DevStandard tell you t
 Prefer to try before installing? From a shell (affects only that one session):
 
 ```bash
-git clone https://github.com/LeonJoeeee/devstandard.git
+git clone https://github.com/LeonJoeeee/DevStandard-ClaudeCode.git
 claude --plugin-dir ./devstandard
 ```
 

@@ -614,9 +614,10 @@ def helper_settings(root):
     """The helper table's rows as (work, Codex model, Codex effort, Claude model), from the page.
 
     `reference/orchestrator.md`'s **Model and effort** section states the table once. A Codex
-    role never reads that page, and the CI gate that proves no Codex model on it is repeated sweeps
-    live pages only, so a literal here or on another page would go stale unseen (#411). Reading it
-    keeps the value single-sited; a table that is gone refuses rather than dispatching nothing.
+    role never reads that page, so reading it here keeps the helper values single-sited instead of
+    restating literals that could go stale (#411). The anchored worker/reviewer rows are also
+    machine-parsed by `scripts/dispatch` and asserted by CI. A table that is gone refuses rather
+    than dispatching nothing.
     """
     rows = HELPER_ROW.findall((Path(root) / 'reference/orchestrator.md').read_text())
     require(rows, 'the dispatch page states no helper table')

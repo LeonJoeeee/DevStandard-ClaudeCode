@@ -722,6 +722,8 @@ REFUSED = {
         ('-f', 'gh api repos/o/r -fname=value'),
         ('-F', 'gh api repos/o/r -F name=value'),
         ('-F', 'gh api repos/o/r -Fname=value'),
+        ('-F', 'gh api repos/o/r --field name=value'),
+        ('-F', 'gh api repos/o/r --field=name=value'),
         ('--input', 'gh api repos/o/r --input body.json'),
         ('--input', 'gh api repos/o/r --input=body.json'),
     ],

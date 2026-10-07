@@ -150,9 +150,8 @@ in-repo lane, the **pre-creation ignore check** is:
 git check-ignore -q .claude/worktrees/probe
 ```
 
-The worktree directory must be gitignored or outside the repository. Use the harness's native
-worktree operation when present; otherwise fetch and create from an explicit base, never implicit
-HEAD:
+Use the harness's native worktree operation when present; otherwise fetch and create from an
+explicit base, never implicit HEAD:
 
 ```sh
 git fetch origin
@@ -267,15 +266,12 @@ undefined effort inherits the session's. A project's `CLAUDE.md`, the issue, or 
 <plugin>/scripts/dispatch 123 --purpose worker --base origin/main --implementation codex
 ```
 
-Fetch the named base first. New identities default deterministically to `task/ISSUE-TITLE` and
-`PROJECT/.claude/worktrees/ISSUE-TITLE`; in-project worktrees must already be ignored. A
-continuation requires `--brief`. `--help` carries the remaining flag contracts, and refuses rather
-than guessing when one is missing.
+Fetch the named base first. For lane identities and continuation flags, use
+`scripts/dispatch --help`.
 
 For a process executor inside a bounded tool invocation, use `--wait` and keep that same invocation
-alive until it returns. Only the supervisor's completion marker reports an observed exit; `--help`
-carries the marker, lock and PID semantics and what to retain until lane cleanup. Read the returned
-output itself.
+alive until it returns. For CLI run state and retention, use `scripts/dispatch --help`.
+Read the returned output itself.
 
 Reconcile a lost run explicitly, on originating-host inspection and durable evidence whose
 preconditions `--help` states:
@@ -432,36 +428,21 @@ substance is unchanged; otherwise review again.
 
 #### The role hook
 
-The role hook reads a shell command's own text, with quoted strings and here-document bodies
-removed, matches whole words, and never parses grammar or reads file content or non-shell tool
-names. It refuses three things: a worker's `merge`, the orchestrator's `gh pr merge`, which points
-here, and a reviewer's `gh api` write flags (`-X`, `--method`, `-f`, `-F`, `--input`). One rule
-stands beside them until `guard protection --apply` makes it GitHub's refusal instead—a worker
-`push` that also names `main` or `master`. Everything else is admitted, a local merge, a tag, a
-release build, a force-push, branch and worktree deletion and a recursive `rm` included, because a
-word stays only where the act is irreversible and no other layer stops it: release authorization is
-prose, reviewer read-only is the agent definition's writer denial and the Codex sandbox, and lane
-teardown is reversible. It guards the ordinary case only—obfuscation, interpreter bodies, runtime
-data, spawned tools, and MCP actions lie outside it—so the merge guard, server protection, and
-available OS sandbox carry the remaining hard layers.
+When the role hook refuses a tool call, read `hooks/pre-tool-use` and
+`scripts/hard_edges.py`'s `command_refusal`. Section 1 still governs every irreversible action.
 
 #### Branch protection
 
-The read-only expected-state check is:
+At founding and whenever protection may have changed, run the read-only expected-state check:
 
 ```sh
 <plugin>/scripts/guard protection --repo OWNER/REPO --branch main
 ```
 
-It requires strict up-to-date checks, admin enforcement, no forced updates, no deletions, and no
-merge queue — the queue stays off because it would merge a server-built commit no check-1 reviewer
-or guard saw. A free-plan private repository's exact plan-limit response records protection as
-unavailable; any other read failure refuses. This is the only command that reads the gate: run it
-at founding and whenever protection may have changed, since `guard merge` relies on GitHub
-enforcing it rather than re-reading it. Human/main-session provisioning adds `--apply` and at
-least one repeated `--check NAME`; no names refuses rather than clearing required contexts.
-Change protection only deliberately, preserving restrictions outside the authorized change;
-`--help` carries the payload's reach.
+For expected settings, plan limits and the payload's reach, use `scripts/guard protection --help`
+and `scripts/hard_edges.py`'s `protection_check`. Human/main-session provisioning uses `--apply`
+with repeated `--check NAME`. Change protection only deliberately, preserving restrictions outside
+the authorized change.
 
 ### Cleanup and release
 
@@ -529,9 +510,9 @@ action.
 **Direct edits:** before writing, read project operations, architecture, and relevant decisions;
 inspect existing changes; admit documentation through `reference/in-repo-writes.md`; and place
 files through `reference/where-it-goes.md`. Update invalidated guidance, keep task state on the
-issue/PR, and drive checks and bot findings as the PR owner. `CLAUDE.md` accepts only commands,
-environment gotchas, worktree copy-list entries, and record-language declarations. Worker craft
-bindings are optional for the orchestrator's small direct edits.
+issue/PR, and drive checks and bot findings as the PR owner. For a `CLAUDE.md` update, use
+`reference/repo-claude-md.md`'s content fence. Worker craft bindings are optional for the
+orchestrator's small direct edits.
 
 **Repositories, secrets, and language:** references resolve from the plugin root. Another
 repository requires an explicit handoff before changes. Never invent an outside-project

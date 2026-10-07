@@ -1,8 +1,7 @@
 # What documentation may be added to a repository
 
-Read this before adding documentation. It decides whether the document belongs in the repository at
-all; editing an already tracked document at that exact path is ordinary work except where the rule
-below says otherwise. Apply the whole predicate, then write only when it admits the document.
+Read this before adding documentation. For admission review, see
+`reference/code-review-prompt.md`'s Floor 2 and the delimited predicate below.
 
 <!-- BEGIN IN-REPO-WRITES PREDICATE -->
 This predicate governs documentation: prose a person or agent reads, including generated prose. It
@@ -20,8 +19,8 @@ inheriting one is the defect, not permission to entrench it.
    - `docs/architecture/<subsystem>.md`: the overview can no longer explain that subsystem legibly;
    - `docs/adr/NNNN-*.md`: the ADR admission test fired;
    - `docs/specs/YYYY-MM-DD-*.md`: the change is substantial;
-   - the repo-root `CLAUDE.md`: there is a command, environment gotcha, worktree copy-list entry, or
-     record-language declaration to put in it.
+   - the repo-root `CLAUDE.md`: operational memory needs an update within
+     `reference/repo-claude-md.md`'s content fence.
 
    The trigger is always required. Arms 2 and 3 cannot admit an ADR whose admission test failed, a
    spec no change earned, or content outside `CLAUDE.md`'s fence. Trigger gating is separate from path

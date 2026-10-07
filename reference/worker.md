@@ -43,10 +43,9 @@ returned to the orchestrator; recording it does not authorize it. An irreversibl
 the human's authorization in words, never inferred from urgency, and a worker still returns it to
 the orchestrator rather than acting.
 
-The role hook refuses one worker word—`merge`, in `git merge` or `gh pr merge`—and a `push` that
-also names `main` or `master`; everything else you run is admitted. A refusal is a reminder, not
-authority to evade the operation: return it under §6, or, if only inert text triggered it, put that
-text in a file and pass the file.
+When the role hook refuses a command, read `hooks/pre-tool-use` and
+`scripts/hard_edges.py`'s `command_refusal`. A refusal is not authority to evade the operation:
+return it under §6, or, if only inert text triggered it, put that text in a file and pass the file.
 
 ## 2. Receiving the task
 
@@ -101,9 +100,8 @@ one, says how you recover your binding, what you may spawn, and what your sandbo
 
 Implement the accepted design in this lane. Make the decisions it leaves within Bounds and disclose
 material choices in the PR. Update every document the change invalidates in the same diff. A PRD or
-architecture expansion returns before implementation. `CLAUDE.md` accepts only commands,
-environment gotchas, worktree copy-list entries, and a record-language declaration under
-`reference/repo-claude-md.md`.
+architecture expansion returns before implementation. For a `CLAUDE.md` update, use
+`reference/repo-claude-md.md`'s content fence.
 
 Write code, comments, documentation, commits, and GitHub records in the packet's language. Product
 text follows its audience. Use the supplied commit attribution. Read the whole diff before delivery
@@ -149,10 +147,9 @@ Neither substitutes for the other.
 The version bump rides the change PR, with the semver call in its description; disagreement is a
 Note.
 
-Push the task branch and open an issue-linked PR as two commands, since one command that pushes
-and also names the default branch is refused. Restate the goal, describe the delivered change, and
-include final evidence and required tree accounting. Leave the branch and worktree in place for the
-orchestrator.
+Push the task branch and open an issue-linked PR as two commands. Restate the goal, describe the
+delivered change, and include final evidence and required tree accounting. Leave the branch and
+worktree in place for the orchestrator.
 
 ### Driving a PR to green
 

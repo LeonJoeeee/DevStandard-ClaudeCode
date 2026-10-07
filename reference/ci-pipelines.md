@@ -2,8 +2,8 @@
 
 Read this at project start, after the skeleton exists. Two robots, generated once — then they age with GitHub, not with the project:
 
-- **CI** — runs the tests on every push/PR. The rule it enforces: *nothing merges to main unless tests are green.* With parallel sessions sharing main as their foundation, this gate cannot rely on anyone remembering to run tests.
-- **Release (CD)** — every project must ANSWER the release question: *what does "shipping" mean here?* A service → deploy; a tool/library → publish a package; a plugin → publish to its marketplace/repo. Default trigger: **a version tag** — pushing `vX.Y.Z` releases automatically; the human decides when to tag. Fully-automatic release-on-merge is a per-project opt-in, not the default.
+- **CI** — for pushes and PRs, use the CI template below and `reference/orchestrator.md`'s Branch protection section.
+- **Release (CD)** — every project must ANSWER the release question: *what does "shipping" mean here?* A service → deploy; a tool/library → publish a package; a plugin → publish to its marketplace/repo. Default trigger: **a version tag** — use the release template below; the human decides when to tag. Fully-automatic release-on-merge is a per-project opt-in, not the default.
 
 Adapt the templates to the project's language/toolchain (swap the test command and the release steps). Keep each file minimal — these are gates, not build systems.
 
@@ -50,7 +50,10 @@ jobs:
 
 The CI token only needs to read the code; a job that must write (like the release template) escalates its own permissions per-job.
 
-**The `merged-result` job is not optional, is not a protection context, and is not renameable.** `scripts/guard merge` requires it by that exact name on the PR head, so a project without it cannot merge through the guard at all (`reference/orchestrator.md`'s Guarded operations section). Its name changes with every base and head, so it can never be a required status check — protection requires `test`, and the guard requires this. `needs: test` is what makes it report only for a merge result whose tests passed; `fetch-depth: 2` is what lets the binding step read the merge commit's two parents. Ship the job under the name the template gives it.
+When generating CI for guarded integration, copy the `merged-result` job and checkout-binding
+step exactly as the template gives them. The machine contract is `scripts/hard_edges.py`'s
+`MERGED_RESULT` and `merge_check`; use `reference/orchestrator.md`'s Guarded operations section
+for invocation.
 
 Third-party (non-`actions/*`) actions: pin to a full commit SHA, not a tag — a tag can be rewritten under you (the 2025 tj-actions compromise; SHA-pinned repos were immune). First-party `actions/*` at a version tag is fine. A SHA never updates itself — that is exactly what the Dependabot file below keeps current.
 
@@ -64,11 +67,9 @@ A self-hosted runner is the other way out, and it is not a degradation: the merg
 
 Three costs decide whether to reach for it at all. The machine has to be up when a PR lands — a run queued behind an offline one is not an outage and not a fallback trigger, and a job still `queued` past five minutes with no runner registering means the loop that starts them is down, which is the human's to restart. It must **never** be used on a public repo: a fork's pull request would run on your hardware, automatically for a repeat contributor and one approval click away for a first-timer. And the machine holds no secret it does not need — the image carries the toolchain, and whatever a job needs arrives through the workflow's own `secrets:` and lives only for that job, which ephemeral makes enforceable and persistent leaves a promise. When the constraint is minutes rather than a platform that is down, reach for this before the check-2 fallback (`reference/ci-cannot-run.md`).
 
-Branch protection is the LAST founding step: `guard protection --apply --check test` names the contexts on the command line, repeating `--check` once per name, and refuses with none rather than PUT an empty list. The role hook does not gate it (`reference/orchestrator.md`'s Guarded operations section); it is the human's or the main session's command by role instruction and by who holds admin credentials. `reference/prd.md`'s setup sequence has the order; `reference/orchestrator.md`'s Branch protection section has the payload. Enabling it turns the rule into a hard gate, and three settings make that gate real:
-
-- **"Require branches to be up to date before merging"** — green on a stale base is not green on main. The guarded merge binds CI to the current base and head; a content-unchanged rebase uses the two-layer proof in `reference/orchestrator.md`'s Merge and rebase proof section, otherwise it needs fresh check 1. **Leave GitHub's merge queue off** — all of it, not only the kinds that rebase; `reference/orchestrator.md`'s Branch protection section says why, and `guard protection` reports an enabled one.
-- **"Do not allow bypassing the above settings"** — without it, admins are exempt, and in a solo setup every agent session runs on the owner's admin credentials.
-- Know your plan: on free-plan **private** repos branch protection doesn't apply, so the gate is convention-only there. It binds all the same; the only difference is whether the platform blocks a violation or a reviewer catches it after. `reference/orchestrator.md`'s Branch protection section owns how the guard recognizes GitHub's plan-limit response and records the unavailable server-side gate.
+At founding, apply branch protection last with `guard protection --apply --check test`;
+`reference/prd.md` owns the setup order. For expected settings, plan limits and provisioning,
+use `scripts/guard protection --help` and `reference/orchestrator.md`'s Branch protection section.
 
 Protection changes only who enforces the ceremony, not the ceremony itself. Use your role page's two-checks paragraph for review and CI, including its bare-version-bump exception; protection does not invent further exceptions. Required status protection makes GitHub enforce the CI portion and nothing else — what it leaves open, and the role guards and reviewed-head merge route that cover it, are in `reference/orchestrator.md`'s Guarded operations section.
 
@@ -118,4 +119,5 @@ The same setup step also generates the repo-root `CLAUDE.md`, when the project h
 
 A green run means the code passed today, not that the pipeline is current. GitHub ends-of-life the runtimes its actions run on, on its own cutoff dates — so a pipeline with zero project changes can go from green to red, usually after months of deprecation-warning annotations inside still-green runs. If a gate goes red mid-task with no relevant change of yours, suspect a vendor deprecation before your own code; when a task already touches a workflow file, bump any `uses:` the run flags as deprecated in the same diff.
 
-Provisioning/check commands and the exact protection payload live in `reference/orchestrator.md`'s Guarded operations section.
+For protection provisioning/checks, use `reference/orchestrator.md`'s Branch protection section;
+see `scripts/guard`'s `main` for the payload.

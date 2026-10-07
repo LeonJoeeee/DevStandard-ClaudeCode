@@ -309,13 +309,16 @@ def runtime(binary, fixture_dir, log_dir, role):
                    '--restricted', '--setting-sources', '',
                    '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
                    '--plugin-dir', str(ROOT), '--tools',
-                   'Bash,Read,Write,Edit' + (',Agent' if native else ''),
+                   'Bash,Read,Write,Edit,NotebookEdit' + (',Agent' if native else ''),
                    '--allowedTools', 'Bash(printf *)', '--permission-mode', 'dontAsk',
                    '--permission-prompts', 'none', '--no-session-persistence',
                    '--no-chrome', '--disable-slash-commands',
                    '--output-format', 'stream-json', '--verbose', '--include-hook-events',
                    '--debug-file', str(log_dir / (case + '.debug.log')),
                    '--model', 'claude-sonnet-4-6']
+        if role == 'reviewer' and not native:
+            command += ['--disallowedTools', 'Write,Edit,NotebookEdit']
+        # Native parents keep writers available; the child's shipped definition must deny them.
         if native:
             command += ['--allowedTools', 'Agent']
             if from_worker:
@@ -402,6 +405,9 @@ def runtime(binary, fixture_dir, log_dir, role):
             and 'refus' in json.dumps(deny[0]).lower(),
             'guard did not refuse the forbidden command for ' + role)
     if native:
+        parent_tools = {tool['name'] for tool in fixture.main_requests[0]['tools']}
+        require({'Write', 'Edit', 'NotebookEdit'} <= parent_tools,
+                'native parent lacks writers, so child writer denial is not exercised')
         if role != 'worker':  # see above: the worker definition carries the page, not a line
             require(CHILD_MARKER[role] in json.dumps(fixture.child_requests[0]),
                     'native Agent did not receive the shipped role')
@@ -412,9 +418,12 @@ def runtime(binary, fixture_dir, log_dir, role):
             role_page_carrier('\n'.join(text_fragments(fixture.child_requests[0])),
                               role, case + '.child', log_dir)
     if role == 'reviewer':
-        role_request = fixture.child_requests[0] if native else fixture.requests[0]
-        writers = {'Write', 'Edit'} & {tool['name'] for tool in role_request['tools']}
-        require(not writers, 'reviewer exposes disallowed built-in writers: ' + repr(writers))
+        role_requests = fixture.child_requests if native else fixture.requests
+        for request in role_requests:
+            tools = {tool['name'] for tool in request['tools']}
+            writers = {'Write', 'Edit', 'NotebookEdit'} & tools
+            require(not writers, 'reviewer exposes disallowed built-in writers: ' + repr(writers))
+            require({'Bash', 'Read'} <= tools, 'reviewer lacks shell/read tools')
     return {'role': case, 'requests': len(fixture.requests),
             'plugin': plugins[0], 'allowed': 'executed', 'forbidden': 'denied by role hook'}
 
@@ -461,8 +470,10 @@ def dispatch_cli(binary, log_dir, native_background=False, purpose="worker"):
             isolation = ['--restricted', '--setting-sources', '', '--strict-mcp-config',
                          '--mcp-config', '{"mcpServers":{}}', '--no-chrome',
                          '--disable-slash-commands', '--tools',
-                         'Bash,Read,Write,Edit' + (',Agent' if native_background else ''),
+                         'Bash,Read,Write,Edit,NotebookEdit' + (',Agent' if native_background else ''),
                          '--allowedTools', 'Bash' if purpose == 'reviewer' else 'Bash(printf *)']
+            if purpose == 'reviewer':
+                isolation += ['--disallowedTools', 'Write,Edit,NotebookEdit']
             if native_background:
                 isolation += ['--allowedTools', 'Agent']
             case.tool('claude', 'import json,os,sys\nfrom pathlib import Path\n'
@@ -540,13 +551,22 @@ def dispatch_cli(binary, log_dir, native_background=False, purpose="worker"):
                 require(host_text.count(body) == 1, 'reviewer role definition not delivered once')
                 require('never comments' in message_text and 'never pushes' in message_text,
                         'reviewer repository/remote rule missing from brief')
-                writers = {'Write', 'Edit', 'NotebookEdit'} & {tool['name'] for tool in fixture.requests[0]['tools']}
-                require(not writers, 'dispatched reviewer exposes built-in writers')
             require('Issue: https://github.com/o/r/issues/12' in message_text,
                     'dynamic issue packet did not reach Claude through brief stdin')
             require('DevStandard operating context: reference/orchestrator.md' not in content,
                     'dispatcher worker inherited orchestrator context')
             final_request = fixture.child_requests[-1] if native_background else fixture.requests[-1]
+            if purpose == 'worker':
+                parent_tools = {tool['name'] for tool in fixture.requests[0]['tools']}
+                require({'Write', 'Edit', 'NotebookEdit'} <= parent_tools,
+                        'dispatched worker lacks the candidate built-in writers')
+            if native_background or purpose == 'reviewer':
+                role_requests = fixture.child_requests if native_background else fixture.requests
+                for request in role_requests:
+                    tools = {tool['name'] for tool in request['tools']}
+                    writers = {'Write', 'Edit', 'NotebookEdit'} & tools
+                    require(not writers, 'dispatched reviewer exposes built-in writers: ' + repr(writers))
+                    require({'Bash', 'Read'} <= tools, 'dispatched reviewer lacks shell/read tools')
             tool_results = [block for message in final_request['messages']
                        if isinstance(message.get('content'), list) for block in message['content']
                        if block.get('type') == 'tool_result']

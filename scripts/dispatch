@@ -850,9 +850,12 @@ def main():
         rows = [r for r in rows if r.get('user', {}).get('login') == owner]
         # Main moving under an accepted head admits the rebase continuation on the acceptance
         # itself: no ruling, and no review round (#421).
-        rebase_continuation = round_check(
+        accounting = round_check(
             rows, pr['headRefOid'],
-            rebase=base_advanced(repo, pr['baseRefName'], pr['headRefOid']))['rebase']
+            rebase=base_advanced(repo, pr['baseRefName'], pr['headRefOid']))
+        for warning in accounting['warnings']:
+            print('dispatch warning: ' + warning, file=sys.stderr)
+        rebase_continuation = accounting['rebase']
     # All input and role validation is finished. From here onward writes are deliberate.
     scratch = Path(tempfile.mkdtemp(prefix=f'devstandard-{args.issue}-{args.purpose}-'))
     # The role rides the agent definition body on BOTH Claude paths — the native `claude`

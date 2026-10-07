@@ -117,14 +117,13 @@ def reconstruct_from_request(host_text, contexts, artifact):
                        sorted(enumerate(arrival, start=1), key=lambda row: row[1])]
 
 
-# How a request from the spawned child is told apart from its parent's: a string that appears
-# in the child's own system prompt and in no parent's. The reviewer's definition opens with a
-# hand-written identity line. The worker's definition body is role source verbatim since #402 —
-# since #409 the shared contract page followed by `reference/harness-claude.md` (ADR 0061) — so its
-# marker is the contract page's own opening declaration, the sentence CI pins in
-# `.github/workflows/ci.yml` and which no other shipped page carries.
-CHILD_MARKER = {'worker': '**This brief is what makes you a worker.**',
-                'reviewer': 'You are the DevStandard reviewer'}
+# Identify a child's request by source text in the serialized system prompt.
+# Deriving the markers from the delivered sources lets either role reword its prose.
+CHILD_MARKER = {
+    'worker': json.dumps((ROOT / 'reference/worker.md').read_text())[1:-1],
+    'reviewer': json.dumps((ROOT / 'agents/reviewer.md').read_text()
+                          .split('---\n', 2)[2].strip().splitlines()[0])[1:-1],
+}
 
 
 # What `agents/worker.md`'s generated body concatenates, in order (ADR 0061): the shared contract
@@ -377,12 +376,12 @@ def runtime(binary, fixture_dir, log_dir, role):
         # hand-written "You are the DevStandard worker" line it used to open with no longer
         # exists; `role_page_carrier` asserts the stronger thing that replaced it. The
         # reviewer's contract is assembled per review rather than shipped as a page, so its
-        # definition keeps the hand-written identity line and is checked for that.
+        # definition keeps a source-derived identity marker and is checked for that.
         if ('worker' if from_worker else role) == 'worker':
             role_page_carrier('\n'.join(text_fragments(fixture.requests[0])), 'worker', case,
                               log_dir)
         else:
-            require('You are the DevStandard ' + role in request_text,
+            require(CHILD_MARKER[role] in json.dumps(fixture.requests[0]),
                     'direct CLI reviewer did not receive its shipped role')
     tool_results = []
     evidence_request = fixture.child_requests[-1] if native else fixture.requests[-1]
@@ -402,7 +401,7 @@ def runtime(binary, fixture_dir, log_dir, role):
             'guard did not refuse the forbidden command for ' + role)
     if native:
         if role != 'worker':  # see above: the worker definition carries the page, not a line
-            require('You are the DevStandard ' + role in json.dumps(fixture.child_requests[0]),
+            require(CHILD_MARKER[role] in json.dumps(fixture.child_requests[0]),
                     'native Agent did not receive the shipped role')
         require('DevStandard operating context: reference/orchestrator.md'
                 not in json.dumps(fixture.child_requests[0]),

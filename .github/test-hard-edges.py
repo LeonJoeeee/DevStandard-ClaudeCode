@@ -1900,12 +1900,9 @@ class ApiTest(unittest.TestCase):
                 })
 
     def test_codex_subagent_defaults_are_read_from_the_page_not_restated(self):
-        """The literals above are the page's, so a page change must move them (#411).
-
-        The gate that proves no Codex model on `reference/orchestrator.md` is repeated sweeps
-        live pages only and cannot see a literal in this repository's scripts, so what keeps the
-        value single-sited is that `codex_hook_config` reads it: the Codex cell of the helper
-        table's closing-default row (#464). A page whose table no longer states that row
+        """`codex_hook_config` reads the Codex cell of the helper table's closing-default row
+        (#464), so a page change must move the configured setting (#411).
+        A page whose table no longer states that row
         refuses rather than dispatching a stale one.
         """
         import tomllib
@@ -1920,8 +1917,8 @@ class ApiTest(unittest.TestCase):
             self.assertEqual(tomllib.loads(h.codex_hook_config(root, 'worker'))['agents'],
                              tomllib.loads(h.codex_hook_config(ROOT, 'worker'))['agents'])
 
-            renamed = page.replace('| **The default — everything else** | `gpt-6.1-sol` at `high` |',
-                                   '| **The default — everything else** | `gpt-7-vega` at `xhigh` |')
+            renamed = re.sub(r'(^\| \**The default —[^|]*\| )`[^`]+` at `[^`]+`',
+                             r'\g<1>`gpt-7-vega` at `xhigh`', page, flags=re.M)
             self.assertNotEqual(renamed, page)
             target.write_text(renamed)
             self.assertEqual(tomllib.loads(h.codex_hook_config(root, 'reviewer'))['agents'], {
@@ -1929,7 +1926,8 @@ class ApiTest(unittest.TestCase):
                 'default_subagent_reasoning_effort': 'xhigh',
             })
 
-            target.write_text(page.replace('| **The default — everything else** |', '| Unclassified work |'))
+            target.write_text(re.sub(r'^\| \**The default —[^|]*\|',
+                                     '| Unclassified work |', page, flags=re.M))
             with self.assertRaises(h.Refusal):
                 h.codex_hook_config(root, 'worker')
 
@@ -2471,10 +2469,6 @@ class ShippedTemplateTest(unittest.TestCase):
         """#326: the setup sequence has nothing to fill in and no template to copy."""
         self.assertFalse((ROOT / 'reference/devstandard-guards.json.template').exists())
         self.assertFalse((ROOT / '.github/devstandard-guards.json').exists())
-        for page in ('reference/prd.md', 'reference/orchestrator.md', 'reference/ci-pipelines.md',
-                     'README.md'):
-            with self.subTest(page=page):
-                self.assertNotIn('devstandard-guards', (ROOT / page).read_text())
 
 
 

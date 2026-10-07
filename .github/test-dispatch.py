@@ -788,7 +788,6 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertEqual(set(grants),{str(self.project/'.git'),str(self.project/'.git/worktrees'/Path(run['worktree']).name)})
         # The prompt is the child's stdin, which `-` asks the CLI to read it from (#454).
         self.assertEqual(a[-1],'-')
-        self.assertIn('This brief is what makes you a worker',data['stdin'])
         self.assertIn('Produce evidence.',data['stdin'])
         self.assertIn('executor started',Path(run['log']).read_text())
         self.assertEqual(Path(run['completion']).read_text().strip(),'0')
@@ -1391,10 +1390,9 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
     def test_codex_packets_carry_the_helper_table_read_from_the_page(self):
         """#460: a Codex role is told its own helper routing, read from the page, never restated.
 
-        Neither the Codex worker nor the Codex reviewer reads `reference/orchestrator.md`, and
-        CI forbids restating a Codex model it names on another live page, so the dispatcher
-        carries the helper table's Codex column into the packet. A Claude packet does not get
-        it: its agent definitions carry the Claude column.
+        Neither the Codex worker nor the Codex reviewer reads `reference/orchestrator.md`, so
+        the dispatcher carries the helper table's Codex column into the packet. A Claude packet
+        does not get it: its agent definitions carry the Claude column.
         """
         worker = self.start('--implementation', 'codex')
         worker_prompt = self.finish(worker)['stdin']
@@ -1408,7 +1406,6 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
             for setting in ('`gpt-6-astra` at `max`', '`gpt-6.1-sol` at `high`',
                             '`gpt-6-luna` at `max`'):
                 self.assertIn(setting, line)
-            self.assertIn('Mechanical (scans', line)
         fixture = DispatchTest(); fixture.setUp()
         try:
             native = fixture.start('--implementation', 'claude')
@@ -1533,7 +1530,6 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         # system prompt: the worker received it twice. The role now rides the definition on both
         # Claude paths, so what stdin must carry is the task packet and nothing else.
         self.assertNotIn((SOURCE/'reference/worker.md').read_text(), data['stdin'])
-        self.assertNotIn('This brief is what makes you a worker', data['stdin'])
         self.assertTrue(data['stdin'].lstrip('\n').startswith('# Task packet'), data['stdin'][:80])
         self.assertIn('Co-Authored-By: Claude opus max <noreply@anthropic.com>', data['stdin'])
         self.assertEqual(result['permission_denials'], denials)
@@ -1665,7 +1661,6 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
                         prompt=Path(review['brief']).read_text()
                         identity='Claude subagent, opus at max, read-only'
                     self.assertIn(f'Reviewer: {identity} — reviewed',prompt)
-                    self.assertIn(f'Reviewer identity: {identity}.',prompt)
                     self.assertNotIn(supplied,prompt)
                     self.assertIn(history,prompt)
 

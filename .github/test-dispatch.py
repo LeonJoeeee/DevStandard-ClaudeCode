@@ -675,6 +675,40 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertEqual(continued['lane_id'], run['lane_id'])
         self.assertEqual(continued['executor_exit'], 0)
 
+    def test_worker_continuation_surfaces_accounting_warnings_without_refusing(self):
+        """#482: a round gap and stale reservation are reported through every carrier."""
+        import runpy
+        run = self.start('--wait')
+        head = self.git('rev-parse', run['branch'])
+        Path(self.env['PR']).write_text(json.dumps(self.pr(13, run['branch'])))
+        verdicts = runpy.run_path(str(SOURCE / '.github/test-review-packet.py'))
+        body = verdicts['canonical_verdict'](head=head).replace('Yes — the PR', 'No — the PR').replace(
+            'Ready to merge: Yes', 'Ready to merge: No')
+        reservation = dict(kind='attempt', round=3, head=head, status='reserved')
+        self.env['REVIEW_COMMENTS'] = json.dumps([
+            dict(id=1, user={'login': 'o'}, body='## Merge check 1 — round 2\n\n' + body),
+            dict(id=2, user={'login': 'o'}, body='## Review attempt — round 3\n\n'
+                 '<!-- devstandard-review-v1 -->\n```json\n' + json.dumps(reservation) + '\n```\n')])
+        for implementation in ('codex', 'claude-cli', 'claude'):
+            with self.subTest(implementation=implementation):
+                options = list(self.continuation_options())
+                options[options.index('--implementation')+1] = implementation
+                if implementation != 'claude':
+                    options.append('--wait')
+                result = subprocess.run([sys.executable, str(self.script), '12', *options,
+                    '--pr', '13', '--project', str(self.project)], env=self.env, text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                continued = json.loads(result.stdout)
+                self.assertEqual(continued['lane_id'], run['lane_id'])
+                self.assertEqual(continued['pr'], 'https://github.com/o/r/pull/13')
+                if implementation == 'claude':
+                    self.assertEqual(continued['status'], 'awaiting-agent-tool')
+                else:
+                    self.assertEqual(continued['executor_exit'], 0)
+                self.assertEqual(result.stderr.splitlines(), [
+                    'dispatch warning: missing, duplicate or out-of-order review rounds: [2]; reconcile history',
+                    'dispatch warning: review attempt 3 is still reserved'])
+
     def test_accepted_recovery_continuation_keeps_the_delivered_lane(self):
         import runpy
         verdicts = runpy.run_path(str(SOURCE / '.github/test-review-packet.py'))

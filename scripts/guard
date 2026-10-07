@@ -17,11 +17,12 @@ for; that page keeps the decision and the command line).
   that authenticates repository association, not a human operator. The merge API call carries a
   head-SHA precondition.
 
-  What this command verifies is what GitHub does not enforce for itself: an open PR into the
+  What this command verifies is what GitHub does not enforce for itself: a PR into the
   current default branch whose head carries that base, checks reported on the head with none
   failed and the pinned merged-result check green, the accepted verdict for the exact head, and
-  the rebase proof below. It re-reads the PR head and the base head afterwards and refuses if
-  either moved. It does NOT read branch protection: strict up-to-date checks, admin enforcement,
+  the rebase proof below. Accounting defects are warnings; only a merge-as-is ruling may settle
+  Goal No, and neither Floor is waivable. GitHub rejects a closed PR or moved head/base at the
+  merge itself. The guard does NOT read branch protection: strict up-to-date checks, admin enforcement,
   the force-push and deletion bans and the merge-queue ban are GitHub's own at the merge itself,
   so reading them here could only turn an API hiccup into a refused merge. `guard protection` is
   the audit that owns every one of those conditions.

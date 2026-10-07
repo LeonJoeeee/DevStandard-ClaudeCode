@@ -71,14 +71,19 @@ def records(rows):
             if data.get('status') == 'returned':
                 data['verdict'] = body[match.end():].removeprefix('\n')
             found.append(data)
+            continuation = data.get('continuation')
+            if (data.get('status') != 'returned' and isinstance(continuation, dict)
+                    and continuation.get('kind') == 'ruling'):
+                found.append(dict(continuation, comment_id=row['id']))
         elif re.match(r'^## [Mm]erge check 1', body):
-            legacy = re.match(r'^## [Mm]erge check 1 — round (\d+)\n\n?(.*)', body, re.S)
-            require(legacy, 'legacy review heading has no round; reconcile PR history before dispatch')
-            verdict = legacy[2]
+            number, verdict, warning = packet_format.legacy_review(body, max((r['round'] for r in found
+                if r.get('status') == 'returned'), default=0)+1)
             identity = re.match(r'Reviewer: ([^\n]+?) — reviewed\s+([0-9a-f]{40,64})', verdict)
-            data = dict(kind='attempt', status='returned', round=int(legacy[1]),
+            data = dict(kind='attempt', status='returned', round=number,
                         head=identity[2] if identity else None, identity=identity[1] if identity else None,
                         architecture='UNKNOWN', verdict=verdict, comment_id=row['id'])
+            if warning:
+                data['warning'] = warning
             data['outcome'] = outcome(verdict, data)
             found.append(data)
     return found
@@ -161,15 +166,19 @@ def live(attempt, errors=None):
 
 def state(history, head):
     attempts = [r for r in history if r['kind'] == 'attempt']
-    returned = sorted((r for r in attempts if r['status'] == 'returned'), key=lambda r: r['round'])
-    require([r['round'] for r in returned] == list(range(1, len(returned)+1)),
-            'review history has missing or duplicate rounds; orchestrator must reconcile it')
+    returned = [r for r in attempts if r['status'] == 'returned']
+    warnings = [r['warning'] for r in returned if r.get('warning')]
+    numbers = [r['round'] for r in returned]
+    if numbers != list(range(1, len(returned)+1)):
+        warnings.append(f'review history has missing, duplicate or out-of-order rounds: {numbers}; reconcile it')
     active = [r for r in attempts if r['status'] in ('reserved', 'dispatched')]
     last = returned[-1] if returned else None
-    rulings = [r for r in history if r['kind'] == 'ruling' and last and r['round'] == last['round']
+    after_verdict = history[history.index(last)+1:] if last else []
+    rulings = [r for r in after_verdict if r['kind'] == 'ruling' and r['round'] == last['round']
                and r['head'] == last['head']]
     ruling = rulings[-1] if rulings else None
     next_step = 'review'
+    accepted = False
     errors = []
     if active:
         # Read every active reservation, not just up to the first live one: `any` would drop the
@@ -187,9 +196,11 @@ def state(history, head):
             next_step = 'accepted'
         else:
             next_step = 'goal-fix-decision'
+        accepted = next_step == 'accepted'
         if ruling and ruling['decision'] != 'continue' and next_step != 'human-escalation':
             next_step = ruling['decision'] if last['head'] == head else 'full-review'
-    status = dict(rounds=len(returned), cap=CAP, next=next_step, last=last, ruling=ruling, active=active)
+    status = dict(rounds=len(returned), next_round=max(numbers, default=0)+1, cap=CAP,
+                  next=next_step, accepted=accepted, last=last, ruling=ruling, active=active, warnings=warnings)
     if errors:
         status['liveness_errors'] = errors
     if next_step == 'lost-reservation':
@@ -203,16 +214,20 @@ def warn(status):
     """Say the round count out loud where the orchestrator acts; nothing here refuses (#434)."""
     if status.get('warning'):
         print('review-packet warning: ' + status['warning'], file=sys.stderr)
+    for warning in status.get('warnings', []):
+        print('review-packet warning: ' + warning, file=sys.stderr)
 
 
-def admit_round(status):
+def admit_round(status, reason=None):
     require(not status['active'], 'review attempt is already active; publish or recover it before another dispatch')
     if status['last']:
         require(status['last']['outcome'].get('floor2') != 'Fail', 'Floor check 2 failed; stop lane and escalate to human')
-        require(status['next'] != 'accepted' or packet_format.recovery_ruling(status['ruling'], status['last']['head']),
+        require(not status['accepted'] or packet_format.recovery_ruling(status['ruling'], status['last']['head']),
                 'accepted verdict: Notes do not authorize another round')
-        require(status['ruling'] and status['ruling']['decision'] == 'continue',
-                'explicit orchestrator continuation ruling required before another round')
+        if not status['accepted']:
+            require(reason and reason.strip(), '--reason is required with start for the blocking goal gap or missing evidence')
+            return dict(kind='ruling', round=status['last']['round'], head=status['last']['head'],
+                        decision='continue', reason=reason, human_authorization=None)
 
 
 def ci_fallback(project, repo, url):
@@ -235,11 +250,13 @@ def ci_fallback(project, repo, url):
 def assemble(args, project, repo, pr, issue, history):
     require(pr['state'] == 'OPEN', 'assembly requires an open PR')
     fields = packet_format.issue_contract(issue['body'])
-    require(pr['body'] and pr['body'].strip(), 'missing complete PR description')
     lanes = [r for r in dispatch.records(issue['comments']) if r.get('kind') == 'lane']
     require(lanes, 'no issue-side lane record; adopt or dispatch the lane first')
     lane = lanes[-1]
-    require(lane['repo'] == repo and lane['branch'] == pr['headRefName'], 'PR differs from recorded issue lane')
+    gaps = []
+    if lane['repo'] != repo or lane['branch'] != pr['headRefName']:
+        gaps.append(f'PR differs from recorded issue lane: recorded {lane["repo"]} '
+                    f'{lane["branch"]}; PR {repo} {pr["headRefName"]}')
     dispatch.lane_check(project, lane)
     require(args.architecture_level is not None, '--architecture-level yes|no is required')
     checks = green(project, repo, pr)
@@ -247,7 +264,6 @@ def assemble(args, project, repo, pr, issue, history):
     # Every pin and diff form assembly cannot produce is reported into the packet rather than
     # withheld from the reviewer whose Floor check 1 decides it (#434). The slot values still say
     # exactly what was read, so a gap never reads as a fact.
-    gaps = []
 
     def reported(name, read, absent):
         try:
@@ -467,7 +483,7 @@ def rule(args, project, repo, pr, status):
     if args.decision in ('continue', 'merge-as-is'):
         require(last['outcome'].get('floor2') != 'Fail', 'Floor check 2 failed; no fix or merge ruling can waive it')
     if args.decision == 'continue':
-        if status['next'] == 'accepted':
+        if status['accepted']:
             head = pr['headRefOid']
             if args.guard_refusal is not None:
                 require(args.guard_refusal.strip(), 'guard refusal must contain the observed refusal')
@@ -505,12 +521,15 @@ def rule(args, project, repo, pr, status):
 
 
 def start(args, project, repo, pr, issue, history):
-    status = state(history, pr['headRefOid']); admit_round(status); warn(status)
+    status = state(history, pr['headRefOid'])
+    continuation = admit_round(status, args.reason); warn(status)
     assembled = assemble(args, project, repo, pr, issue, history)
     # Native Claude dispatch needs pinned evidence; refuse before reserving its round (#443).
     if assembled['implementation'] == 'claude':
         dispatch.pinned_evidence(project, Path(assembled['packet']).read_text())
-    record = dict(kind='attempt', status='reserved', round=status['rounds']+1, **assembled)
+    record = dict(kind='attempt', status='reserved', round=status['next_round'], **assembled)
+    if continuation:
+        record['continuation'] = continuation
     response = write_comment(project, repo, args.pr, record)
     cid = response['id']
     latest = state(records(comments(project, repo, args.pr)), pr['headRefOid'])
@@ -558,7 +577,10 @@ reference/orchestrator.md points here for; that page keeps the decision and the 
 
   Round accounting. Rounds are counted, and a count at or above the recorded cap is warned about on
   stderr and in `status`. Nothing refuses on the count: repeated findings of the same shape are the
-  stop signal, and the reviewer's own contract reports them.
+  stop signal, and the reviewer's own contract reports them. Legacy headings and irregular round
+  numbering warn too; the latest published whole verdict remains operative. Ordinary fix rounds
+  use start --reason, recorded as a continuation ruling in the reservation's same write.
+  Accepted-head recovery keeps its prior evidence-bearing ruling; Notes never authorize a round.
 
   Attempt disposition. A recorded run stays on publication or on exact-run reconciliation, and
   publication is also where a supervisor's record that it never started the executor releases one.
@@ -591,7 +613,7 @@ def main():
     parser.add_argument('--attempt', type=int, help='PR comment ID returned by start')
     parser.add_argument('--verdict', type=Path, help='whole Claude-native verdict (Codex uses recorded output)')
     parser.add_argument('--decision', choices=['continue', 'merge-as-is', 'rewrite', 'abandon', 'change-route'])
-    parser.add_argument('--reason')
+    parser.add_argument('--reason', help='start: blocking goal gap or missing evidence; rule/fail: reason for the decision')
     parser.add_argument('--guard-refusal', help='orchestrator attestation: the guard refusal observed on this accepted head')
     parser.add_argument('--human-touchpoint', action='store_true')
     parser.add_argument('--human-authorization')

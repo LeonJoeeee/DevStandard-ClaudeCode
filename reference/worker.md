@@ -88,8 +88,10 @@ one, says how you recover your binding, what you may spawn, and what your sandbo
 3. Copy only untracked inputs named by the project's `CLAUDE.md` allowlist. No list means no copy.
 4. Before installs, tests, or task-generated writes, inspect existing changes with
    `git status --porcelain -uall`. Publish and account for the baseline where the issue requires it.
-   Install dependencies and run the baseline suite. An unrelated installation, runtime, or test
-   failure stops and returns to the orchestrator.
+   Install dependencies and run the baseline suite, excluding host CLI runtime qualification
+   that already gates the merge in CI. CI owns those suites; workers may run them locally for
+   confidence but do not owe them as baseline or evidence. An unrelated installation, runtime,
+   or test failure stops and returns to the orchestrator.
 5. Before adding documentation read `reference/in-repo-writes.md`; before choosing any concrete
    output destination read `reference/where-it-goes.md`. Follow established destinations. Never
    invent an outside-project destination. An unresolved destination for confidential data,

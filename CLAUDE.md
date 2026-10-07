@@ -89,6 +89,9 @@ python3 .github/test-dispatch.py
 # Review-packet assembly, green-head admission, publication, and round accounting
 python3 .github/test-review-packet.py
 
+# CI owns these host CLI runtime suites; they are not worker baseline/evidence commands.
+# Both gate every PR with pinned CLIs; local runs are optional confidence checks.
+# Codex needs a writable CLI runtime home; Claude needs the pinned host build.
 # The dispatched Codex CLI executor (role hook, dispatched brief, MCP admission), using the CLI
 # version pinned in ci.yml; the model provider is a local deterministic fixture.
 python3 .github/test-codex-runtime.py

@@ -446,11 +446,8 @@ the authorized change.
 
 ### Cleanup and release
 
-After integration run `scripts/dispatch --cleanup ISSUE --pr NUMBER`; routine integrated-lane
-teardown needs no separate authorization record. Cleanup runs outside the lane and requires the
-integrated PR's branch and exact head, a stopped executor, and no tracked, untracked, ignored, or
-sole-copy leftovers. Sweep by PR state, never ancestry: squash/rebase integration makes
-`git branch --merged` unreliable.
+After integration run `scripts/dispatch --cleanup ISSUE --pr NUMBER`. Sweep by PR state, never
+ancestry: squash/rebase integration makes `git branch --merged` unreliable.
 
 Before teardown, inspect `git status --porcelain -uall` and base-relative commits. Preserve
 unintegrated work and sole durable copies; discarding either requires the human's explicit words.

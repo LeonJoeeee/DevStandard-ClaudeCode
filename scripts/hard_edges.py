@@ -508,11 +508,11 @@ def carries(text, phrase):
 def carries_flag(text, flag):
     """True where the text carries this option, with or without its value written onto it.
 
-    `-XPOST` is one word to the shell and one flag to `gh`, so the reviewer's write-flag
-    rule keeps the older boundary — begins at a non-identifier position, not continued by
-    a hyphen — rather than the whole-word rule above.
+    A flag begins after neither an identifier nor a hyphen, so `--files` cannot carry
+    `-f`. Values may be attached (`-XPOST`, `--method=POST`), so the trailing boundary
+    excludes only a hyphen rather than requiring a whole word.
     """
-    return re.search(r'(?<!\w)' + re.escape(flag) + r'(?!-)', text) is not None
+    return re.search(r'(?<![\w-])' + re.escape(flag) + r'(?!-)', text) is not None
 
 
 # Three rules and nothing else (#425). A word stays only where the act it names is

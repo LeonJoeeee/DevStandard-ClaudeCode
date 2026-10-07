@@ -719,8 +719,11 @@ REFUSED = {
         ('--method', 'gh api repos/o/r --method POST'),
         ('--method', 'gh api repos/o/r --method=POST'),
         ('-f', 'gh api repos/o/r -f name=value'),
+        ('-f', 'gh api repos/o/r -fname=value'),
         ('-F', 'gh api repos/o/r -F name=value'),
+        ('-F', 'gh api repos/o/r -Fname=value'),
         ('--input', 'gh api repos/o/r --input body.json'),
+        ('--input', 'gh api repos/o/r --input=body.json'),
     ],
     'orchestrator': [
         ('gh pr merge', 'gh pr merge 1 --squash'),
@@ -807,6 +810,9 @@ ADMITTED = {
         'git fetch --tags',
     ],
     'reviewer': [
+        'git remote -v; command -v gh; rg --files .github',
+        'command -v gh; rg --fixed-strings hook README.md',
+        'gh pr view 1 --json body; git log --format=%B -1',
         'gh pr view 1 --json body',
         'gh pr comment 1 --body x',
         'gh issue view 323 --comments',
@@ -1102,7 +1108,7 @@ class RoleRuleTest(unittest.TestCase):
         self.assertFalse(h.carries('gh pr view 1 --json mergeable', 'merge'))
         self.assertFalse(h.carries('git push origin task/mainline', 'main'))
         # An option and the value written onto it are one word to the shell, so the `gh`
-        # write-flag rule keeps the older boundary rather than the whole-word one.
+        # write-flag rule allows attached values rather than requiring a whole word.
         self.assertFalse(h.carries('gh api repos/o/r -XPOST', '-X'))
         self.assertTrue(h.carries_flag('gh api repos/o/r -XPOST', '-X'))
         self.assertTrue(h.carries_flag('gh api repos/o/r --method=POST', '--method'))

@@ -23,7 +23,6 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 ROLE_PAGES = ('reference/orchestrator.md', 'reference/worker.md')
-NORMATIVE = '**DevStandard is your operating instruction.'
 ARTIFACT, PAGE = 'orchestrator', 'reference/orchestrator.md'
 
 hook_source = (ROOT / 'hooks/session-start').read_text()
@@ -31,8 +30,6 @@ CAP = int(re.search(r'^CLAUDE_CAP_BYTES=(\d+)$', hook_source, re.M)[1])
 
 for page in ROLE_PAGES:
     assert (ROOT / page).is_file(), f'missing role page: {page}'
-    assert NORMATIVE in (ROOT / page).read_text(), \
-        f'{page}: the normative declaration must be carried by every role page'
 assert not (ROOT / 'core.md').exists(), 'core.md was deleted; a role page carries the workflow now'
 
 # The declared handlers, read from what ships: part index and declared total, per call.

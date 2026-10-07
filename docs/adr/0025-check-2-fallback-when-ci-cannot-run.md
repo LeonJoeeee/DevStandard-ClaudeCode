@@ -3,7 +3,7 @@
 Status: Accepted (2026-08-02). Amends 0011 (check 2's availability, and gate order under
 the fallback only; the two gates themselves, the reviewed-diff-is-the-merged-diff rule,
 and the deterministic-last-word principle stand). Amended by 0032 (2026-08-13). Amended
-(2026-09-01). Amended (2026-09-07). Amended (2026-09-20).
+(2026-09-01). Amended (2026-09-07). Amended (2026-09-20). Amended (2026-10-07).
 
 ## Context
 
@@ -144,3 +144,10 @@ this ADR's fallback could not be commissioned through the assembler at all (#298
 reason the checklist reaches the reviewer — it is the only impartial party under the fallback, and
 it cannot open this file or follow a link — is unchanged, and so are the rule, its trigger, its
 non-triggers and its evidence template. `reference/ci-cannot-run.md` carries the operative wording.
+
+**Amendment (2026-10-07, issue #478):** The 2026-08-13 and 2026-09-20 blocks' assumption that the
+reviewer cannot open files or follow links is retired: reviewers now have repository and network
+reads. The checklist still travels with the CI-FALLBACK evidence in one published comment, so the
+clean reader receives the complete audit context without relying on a later file or link. The
+fallback's trigger, non-triggers, evidence template and audit semantics are unchanged;
+`reference/ci-cannot-run.md` carries the operative wording.

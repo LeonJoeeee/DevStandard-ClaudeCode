@@ -58,6 +58,7 @@ class DispatchTest(unittest.TestCase):
         (self.project / '.gitignore').write_text('/.claude/worktrees/\n')
         self.git('add', '.')
         self.git('commit', '-m', 'base')
+        self.git('remote', 'add', 'origin', 'https://github.com/o/r.git')
         self.git('update-ref', 'refs/remotes/origin/main', 'HEAD')
         self.tool('gh', '''import json,os,sys
 from pathlib import Path
@@ -114,7 +115,15 @@ if os.environ.get('FAKE_COMMITS'):
   (wt/'result.txt').write_text('worker result '+str(n))
   for cmd in [('add','result.txt'),('commit','-m','worker step '+str(n))]:
    subprocess.run(['git','-C',str(wt),*cmd],check=True)
-out.write_text(json.dumps({'args':a,'sid':os.getsid(0),'pid':os.getpid(),'stdin':sys.stdin.read(),'role':os.environ.get('DEVSTANDARD_ROLE')}))
+probe={}
+if os.environ.get('FAKE_REVIEW_WRITE'):
+ wt=Path.cwd()
+ def git(*args): return subprocess.check_output(['git',*args],text=True).strip()
+ probe=dict(cwd=str(wt),head=git('rev-parse','HEAD'),git_dir=git('rev-parse','--absolute-git-dir'),origin=git('remote','get-url','origin'),evidence=(wt/'evidence.txt').read_text())
+ (wt/'evidence.txt').write_text('reviewer experiment')
+ (wt/'reviewer-output.txt').write_text('disposable')
+ git('update-ref','refs/heads/reviewer-experiment','HEAD')
+out.write_text(json.dumps({'args':a,'sid':os.getsid(0),'pid':os.getpid(),'stdin':sys.stdin.read(),'role':os.environ.get('DEVSTANDARD_ROLE'),**probe}))
 hold=os.environ.get('FAKE_HOLD');deadline=time.monotonic()+20
 while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep(.01)
 raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
@@ -1246,7 +1255,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         packet=self.review_packet()
         review=self.call('--purpose','reviewer','--implementation','codex','--packet',str(packet))
         a=self.finish(review)['args']
-        self.assertEqual(a[a.index('-s')+1],'read-only')
+        self.assertEqual(a[a.index('-s')+1],'workspace-write')
         brief=self.root/'continue.txt';brief.write_text('Continue the adopted work.')
         continued=self.call('--purpose','worker','--continue','--implementation','codex','--brief',str(brief));self.finish(continued)
         self.assertEqual(continued['lane_id'],lane['lane_id'])
@@ -1298,7 +1307,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         lane = self.call('--adopt','--base','origin/main','--branch','main','--worktree',str(wt))
         self.assertEqual((lane['branch'], lane['worktree']), ('main', str(wt)))
 
-    def test_reviewer_reuses_lane_read_only_and_preserves_packet(self):
+    def test_reviewer_uses_writable_networked_copy_and_preserves_packet(self):
         run=self.start();self.finish(run)
         self.env['DEVSTANDARD_ROLE']='worker'
         packet=self.review_packet()
@@ -1308,13 +1317,18 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assert_role_config(a, 'reviewer')
         self.assertIn('--dangerously-bypass-hook-trust',a)
         self.assertTrue(any('--role reviewer' in arg and arg.startswith('hooks.PreToolUse=') for arg in a))
-        self.assertEqual(a[a.index('-s')+1],'read-only');self.assertNotIn('--add-dir',a);self.assertNotIn('sandbox_workspace_write.network_access=true',a)
+        self.assertEqual(a[a.index('-s')+1],'workspace-write')
+        self.assertIn('sandbox_workspace_write.network_access=true',a)
+        self.assertEqual(a[a.index('-C')+1],review['review_checkout'])
+        self.assertEqual([a[i+1] for i,x in enumerate(a) if x=='--add-dir'],[review['review_git_dir']])
+        self.assertNotEqual(review['review_checkout'],run['worktree'])
+        self.assertFalse(Path(review['review_checkout']).parent.exists())
         self.assertIn('Complete report.',data['stdin']);self.assertEqual(review['worktree'],run['worktree'])
 
     def test_codex_child_admits_host_mcp_tools_and_keeps_each_purposes_sandbox(self):
         """#358: `codex exec` is non-interactive, so its approval policy is `never`, which
         auto-rejects every MCP tool call. On codex-cli 0.153.4 only the per-server key admits
-        one, and it composes with both sandbox modes, so neither mode moves to buy MCP back."""
+        one, and it composes with the sandbox without trading it away."""
         self.env['FAKE_MCP_LIST']=json.dumps([{'name':'papervault','enabled':True},
                                               {'name':'chrome-devtools','enabled':True},
                                               {'name':'retired','enabled':False},
@@ -1332,7 +1346,7 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         review=self.call('--purpose','reviewer','--implementation','codex','--packet',str(self.review_packet()))
         b=self.finish(review)['args']
         self.assertEqual([x for x in b if x.startswith('mcp_servers.')],admitted)
-        self.assertEqual(b[b.index('-s')+1],'read-only')
+        self.assertEqual(b[b.index('-s')+1],'workspace-write')
         for argv in (a,b):
             self.assertNotIn('--dangerously-bypass-approvals-and-sandbox',argv)
             self.assertNotIn('--approve-for-me',argv)
@@ -1634,13 +1648,102 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertNotIn('--resume', data['args'])
         self.assertNotIn('--continue', data['args'])
 
-    def test_claude_cli_reviewer_refuses_before_writes(self):
-        before = set(self.root.iterdir())
-        error = self.call('--purpose', 'reviewer', '--implementation', 'claude-cli', ok=False)
-        self.assertIn('read-only', error)
-        self.assertIn('--implementation codex', error)
-        self.assertEqual(set(self.root.iterdir()), before)
-        self.assertEqual(self.lane_records(), [])
+    def test_claude_cli_reviewer_uses_copy_and_judging_role(self):
+        run=self.start();self.finish(run)
+        review=self.call('--purpose','reviewer','--implementation','claude-cli',
+                         '--packet',str(self.review_packet()),'--wait')
+        rows=self.finish_claude(review)
+        data=json.loads(next(row['result'] for row in rows if row.get('type')=='result'))
+        self.assertEqual(data['cwd'],review['review_checkout'])
+        self.assertNotEqual(data['cwd'],run['worktree'])
+        self.assertEqual(data['args'][data['args'].index('--agent')+1],'devstandard:reviewer')
+        self.assertEqual(data['role'],'reviewer')
+        self.assertIn('Complete report.',data['stdin'])
+        self.assertIn('never comments',data['stdin'])
+        self.assertIn('never pushes',data['stdin'])
+        self.assertFalse(Path(data['cwd']).parent.exists())
+
+    def test_reviewer_writes_and_refs_do_not_touch_clean_or_dirty_lane_at_later_head(self):
+        # Reading the lane HEAD or sharing its object/ref storage breaks this pin and isolation.
+        (self.project/'evidence.txt').write_text('pinned evidence')
+        self.git('add','.');self.git('commit','-m','evidence')
+        pin=self.git('rev-parse','HEAD')
+        run=self.start();self.finish(run)
+        wt=Path(run['worktree'])
+        (wt/'evidence.txt').write_text('later evidence')
+        self.git('-C',str(wt),'add','.');self.git('-C',str(wt),'commit','-m','later')
+        packet=self.review_packet(head=pin)
+        self.env['FAKE_REVIEW_WRITE']='1'
+        for dirty in (False,True):
+            with self.subTest(dirty=dirty):
+                if dirty:
+                    (wt/'evidence.txt').write_text('worker edits')
+                    (wt/'worker-input.txt').write_text('untracked input')
+                before=self.git('-C',str(wt),'status','--porcelain','-uall')
+                refs=self.git('show-ref')
+                review=self.call('--purpose','reviewer','--implementation','codex','--packet',str(packet),'--wait')
+                data=self.finish(review)
+                self.assertEqual(data['head'],pin)
+                self.assertEqual(data['evidence'],'pinned evidence')
+                self.assertEqual(data['origin'],'https://github.com/o/r.git')
+                self.assertEqual(data['git_dir'],review['review_git_dir'])
+                self.assertEqual(self.git('show-ref'),refs)
+                self.assertEqual(self.git('-C',str(wt),'status','--porcelain','-uall'),before)
+                self.assertEqual((wt/'evidence.txt').read_text(),'worker edits' if dirty else 'later evidence')
+                self.assertFalse(Path(data['cwd']).parent.exists())
+
+    def test_reviewer_copy_is_removed_after_nonzero_and_signal(self):
+        run=self.start();self.finish(run)
+        self.env['FAKE_EXIT']='7'
+        review=self.call('--purpose','reviewer','--implementation','codex','--packet',str(self.review_packet()),'--wait')
+        self.assertEqual(review['executor_exit'],7)
+        self.assertFalse(Path(review['review_checkout']).parent.exists())
+        self.env['FAKE_HOLD']=str(self.root/'review-release')
+        review=self.call('--purpose','reviewer','--implementation','codex','--packet',str(self.review_packet()))
+        self.await_run()
+        os.kill(review['pid'],signal.SIGTERM)
+        # Do not release the CLI hold: the supervisor must forward termination, reap and clean.
+        self.env.pop('FAKE_HOLD')
+        self.wait_completion(review)
+        self.assertEqual(int(Path(review['completion']).read_text()),-signal.SIGTERM)
+        self.assertFalse(Path(review['review_checkout']).parent.exists())
+        self.assertEqual(self.git('-C',run['worktree'],'status','--porcelain','-uall'),'')
+
+    def test_reviewer_checkout_failure_records_no_launch_and_cleans_partial_copy(self):
+        run=self.start();self.finish(run)
+        real_git=shutil.which('git')
+        self.tool('git', 'import os,sys\nfrom pathlib import Path\n'
+            + "if sys.argv[1:2]==['clone']:\n Path(sys.argv[-1]).mkdir(parents=True)\n raise SystemExit('fixture clone unavailable')\n"
+            + 'os.execv('+repr(real_git)+',['+repr(real_git)+',*sys.argv[1:]])\n')
+        error=self.call('--purpose','reviewer','--implementation','codex','--packet',str(self.review_packet()),'--wait',ok=False)
+        review=self.lane_records()[-1]
+        self.assertIn('lost or unknown',error)
+        self.assertIn('fixture clone unavailable',Path(review['launch_failure']).read_text())
+        self.assertFalse(Path(review['output']).exists())
+        self.assertFalse(Path(review['completion']).exists())
+        self.assertFalse(Path(review['review_checkout']).parent.exists())
+
+    def test_reviewer_copy_preserves_relative_upstream_fetch(self):
+        # A relative origin interpreted from the relocated copy would fetch the wrong path.
+        remote=self.root/'upstream.git'
+        self.git('init','--bare',str(remote))
+        self.git('remote','set-url','origin','../upstream.git')
+        self.git('push','origin','main')
+        branch,wt=self.hand_made_lane()
+        self.call('--adopt','--branch',branch,'--worktree',str(wt),'--base','origin/main')
+        self.tool('codex', '''import json,subprocess,sys
+from pathlib import Path
+a=sys.argv[1:]
+if a[:2]==['mcp','list']: print('[]'); raise SystemExit(0)
+subprocess.run(['git','fetch','origin'],check=True)
+origin=subprocess.check_output(['git','remote','get-url','origin'],text=True).strip()
+Path(a[a.index('-o')+1]).write_text(json.dumps(dict(origin=origin)))
+''')
+        review=self.call('--purpose','reviewer','--implementation','codex',
+                         '--packet',str(self.review_packet()),'--wait')
+        self.assertEqual(review['executor_exit'],0,Path(review['log']).read_text())
+        self.assertEqual(json.loads(Path(review['output']).read_text())['origin'],str(remote))
+        self.assertFalse(Path(review['review_checkout']).parent.exists())
 
     def test_reviewer_identity_is_filled_or_overridden_from_executor(self):
         run=self.start();self.finish(run)

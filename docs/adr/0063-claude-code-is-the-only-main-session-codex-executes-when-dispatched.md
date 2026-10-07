@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-09-29). Supersedes 0056. Amends 0006, 0007, 0008, 0011, 0015, 0016, 0018,
 0019, 0022, 0024, 0035, 0036, 0038, 0039, 0040, 0045, 0046, 0047, 0049, 0051, 0052, 0059, 0060 and
-0061 (their live Codex-host, delivery, routing and version-exemption clauses).
+0061 (their live Codex-host, delivery, routing and version-exemption clauses). Amended (2026-10-07).
 
 **Scope: this ADR decides what the method ships.** It removes a supported host.
 
@@ -82,3 +82,13 @@ ADR bodies stay as written. Dated amendment blocks reconcile the live statements
 amendments left routing a reader to a Codex host, to `codex-native`, to the adapter or to a third
 manifest. 0045's removal is history; this ADR decides the removal again rather than reviving 0045.
 Rollback is a reviewed revert of the implementing PR.
+
+**Amendment (2026-10-07, issue #478):** The kept Codex reviewer sandbox is now `workspace-write`
+with network in an independent one-off checkout of the pinned head, with a write grant only to that
+copy's Git metadata. CLI copy creation/removal belongs to the supervisor; native Claude inherits its
+session cwd with the written no-file-write rule. All reviewers remain read-only toward the
+repository and its remote and return only the verdict for caller publication. Worker grants, host
+removal and the two-manifest version predicates are unchanged.
+
+`reference/code-review-prompt.md` carries the repository/remote rule; `reference/orchestrator.md`'s
+Dispatching to an executor section and `reference/harness-codex.md` carry the environment mechanics.

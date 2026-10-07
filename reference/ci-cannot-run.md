@@ -59,7 +59,12 @@ Run every job CI would have run from that worktree, unfiltered and to completion
 
 **Evidence first, then check 1.** As with ordinary green-PR admission, evidence precedes review. Under the fallback, run the suite and post the evidence *before* check 1, and hand that comment to the reviewer with the diff — an impartial clean reader auditing the run is the closest available substitute for an impartial runner. If check 1 sends the diff back, or the rebase moves, redo the run: the last evidence on the PR must come from the tree that actually merged.
 
-**Post this with it.** The reviewer is a clean context and cannot open this file or follow a link, so the checklist travels with the evidence — in the same PR comment as the `CI-FALLBACK` block below. Commission the review with `scripts/review-packet start --ci-fallback <that comment's URL>`, and the assembler carries the whole comment into the CI-fallback placeholder of `reference/code-review-prompt.md`, which otherwise reads `NONE`:
+**Post this with it.** The reviewer is a clean context with repository and network reads. The
+checklist still travels with the evidence so the audit's required context does not depend on a
+later file or link — in the same PR comment as the `CI-FALLBACK` block below. Commission the review
+with `scripts/review-packet start --ci-fallback <that comment's URL>`, and the assembler carries
+the whole comment into the CI-fallback placeholder of `reference/code-review-prompt.md`, which
+otherwise reads `NONE`:
 
     Audit the CI-fallback evidence above against all four items:
     - Is the stated cause outside this repo (minutes exhausted, platform

@@ -387,7 +387,7 @@ class ReviewTest(unittest.TestCase):
         self.script = SOURCE/'scripts/review-packet'
         remote=self.root/'remote.git'
         self.d.git('init','--bare',str(remote))
-        self.d.git('remote','add','origin',str(remote))
+        self.d.git('remote','set-url','origin',str(remote))
         self.d.git('push','origin','main')
         self.base=self.d.git('rev-parse','HEAD')
         self.branch,self.wt=self.d.hand_made_lane()
@@ -448,7 +448,7 @@ if os.environ.get('WATCH_READY'): Path(os.environ['WATCH_READY']).touch()""")
         self.d.tool('codex', '''import os,sys,time
 from pathlib import Path
 a=sys.argv[1:]
-assert a[a.index('-s')+1]=='read-only'
+assert a[a.index('-s')+1]=='workspace-write'
 Path(a[a.index('-o')+1]).write_bytes(Path(os.environ['VERDICT']).read_bytes())
 hold=os.environ.get('FAKE_HOLD');deadline=time.monotonic()+20
 while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep(.01)

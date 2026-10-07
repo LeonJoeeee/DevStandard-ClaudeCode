@@ -8,7 +8,7 @@ installed plugin root. The marked section below is the part `scripts/dispatch` h
 ## Dispatching Codex
 
 Dispatch a worker with `scripts/dispatch ... --implementation codex`, and commission a gating review
-through `scripts/review-packet start ... --implementation codex`, which uses the fresh read-only
+through `scripts/review-packet start ... --implementation codex`, which uses the fresh
 Codex CLI process and whole-verdict publication path. The CLI must be installed and authenticated,
 and a worker needs superpowers installed into Codex: its craft bindings name superpowers skills, and
 Codex resolves skills from its own roots, never from Claude Code's (`README.md`'s Install section).
@@ -18,9 +18,24 @@ permission boundaries.
 **Verified Codex mechanics.** Run Codex CLI in the foreground of its detached supervisor. A linked
 worktree needs write grants to both the common `.git` directory and its `.git/worktrees/<name>`
 directory; the first grant is not recursive. Codex's `review` subcommand cannot take this contract
-and its sandbox controls, so gating review uses plain read-only `exec`. Inspect actual output shape,
+and its sandbox controls, so gating review uses plain `exec`. Inspect actual output shape,
 including newlines and attribution, before accepting it. These are Codex-specific observations, not
 claims about another tool.
+
+A CLI reviewer runs with `workspace-write` and network in a one-off checkout of the packet's
+pinned head, under its run scratch (`TMPDIR` or the system temporary directory). Its Git metadata
+lives beside that checkout; the only extra write grant is to that copy's metadata, so fetching
+history cannot alter the lane's refs or objects. The supervisor creates the independent clone,
+restores the upstream origin, and removes the copy before recording completion, including a
+nonzero exit or handled cancellation. Creation failure records `launch-failure` and launches no
+reviewer; it never falls back to the lane. A killed/lost supervisor requires the existing exact-run
+recovery; its known disposable copy may remain for caller cleanup.
+
+Read-only describes authority toward the repository and its remote: the reviewer never comments,
+edits a PR or issue, pushes, or changes remote state. Disposable experiments stay in the copy and
+evidence stays pinned; `reference/code-review-prompt.md` carries this rule in every CLI brief.
+The caller publishes the verdict. The reviewer `gh api` write-flag hook remains a reminder,
+not a complete remote boundary.
 
 For MCP access in a dispatched Codex executor, see `scripts/dispatch`'s `mcp_tool_admission`.
 Do not attach a server a worker must not reach to a session that runs workers. When a visible tool

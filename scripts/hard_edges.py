@@ -524,14 +524,15 @@ def carries_flag(text, flag):
 # `push --delete` and `worktree remove` name reversible acts on a disposable lane whose
 # branch is already pushed; the reviewer's whole list admitted `gh pr comment`,
 # `gh pr review --approve` and `gh pr edit`, so it carried no independence of its own —
-# that rests on `agents/reviewer.md`'s `disallowedTools` and the Codex `-s read-only`
-# sandbox; and the orchestrator's `git merge` named a local, reversible merge while
+# that rests on independent CLI checkouts and the written repository/remote prohibition
+# (native Claude keeps its session cwd and denies built-in writers); and the orchestrator's
+# `git merge` named a local, reversible merge while
 # refusing an ordinary `gh issue create --body` (#351).
 REFUSED_WORDS = {
     # An unreviewed squash to the default branch cannot be undone, and `guard protection`
     # configures no required review, so nothing else on the path stops it.
     'worker': ('merge',),
-    # Read-only is the agent definition's and the sandbox's; the one command rule with a
+    # Repository/remote read-only is the role's written rule; the one command rule with a
     # real target is the `gh api` write flags below.
     'reviewer': (),
     # Merging outside `guard merge` skips the reviewed head, the rebase proof and the
@@ -556,7 +557,7 @@ DEFAULT_BRANCHES = ('main', 'master')
 INSTEAD = {
     'worker': ('a worker pushes its own task branch and hands the PR back to the orchestrator, '
                'which owns acceptance, merge and teardown'),
-    'reviewer': 'a reviewer returns a verdict and writes nothing',
+    'reviewer': 'a reviewer returns a verdict and never changes the repository or its remote',
     'orchestrator': ('the orchestrator merges only through `<plugin>/scripts/guard merge`, which '
                      'verifies the reviewed head, proves the rebase and reads GitHub itself'),
 }

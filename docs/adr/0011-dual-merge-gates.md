@@ -1,6 +1,6 @@
 # 0011 — Two ordered merge gates: clean-context diff review, then green CI
 
-Status: Accepted (2026-07-02). Amended by 0045 (2026-09-05). Amended by 0025 (2026-08-02). Amended by 0035 (2026-08-22). Amended by 0040 (2026-08-26). Amended by 0044 (2026-09-02). Amended by 0046 (2026-09-05). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04).
+Status: Accepted (2026-07-02). Amended by 0045 (2026-09-05). Amended by 0025 (2026-08-02). Amended by 0035 (2026-08-22). Amended by 0040 (2026-08-26). Amended by 0044 (2026-09-02). Amended by 0046 (2026-09-05). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04). Amended (2026-10-07).
 
 ## Context
 
@@ -105,3 +105,13 @@ read-only Codex CLI process; the human's instruction still selects another quali
 `reference/orchestrator.md`'s Dispatching to an executor section carries the operative wording,
 replacing the removed `reference/external-agent.md` pointer. Both ordered checks and the blocked
 rather than lowered unavailable-reviewer rule remain unchanged.
+
+**Amendment (2026-10-07, issue #478):** Gate 1's read-only property in the executor amendments is
+authority toward the repository and its remote, not an OS read-only mode. CLI reviewers use
+independent one-off pinned-head checkouts (Codex `workspace-write` with network); native Claude
+inherits the session cwd and follows a no-file-write rule. The reviewer never comments, edits a PR
+or issue, pushes or changes remote state; the caller publishes the verdict. The fresh-context
+requirement, two checks and version-line exemptions are unchanged.
+
+`reference/code-review-prompt.md` carries the repository/remote rule; `reference/orchestrator.md`'s
+Dispatching to an executor section and `reference/harness-codex.md` carry the environment mechanics.

@@ -1,6 +1,6 @@
 # 0051 — A guard that cannot be complete guards the ordinary case
 
-Status: Accepted (2026-09-10). Amends 0046 (role hooks). Amended by 0052 (2026-09-10). Amended (2026-09-11). Amended by 0055 (2026-09-11). Amended by 0056 (2026-09-11). Amended (2026-09-12). Amended by 0062 (2026-09-20). Amended (2026-09-20). Amended by 0063 (2026-09-29).
+Status: Accepted (2026-09-10). Amends 0046 (role hooks). Amended by 0052 (2026-09-10). Amended (2026-09-11). Amended by 0055 (2026-09-11). Amended by 0056 (2026-09-11). Amended (2026-09-12). Amended by 0062 (2026-09-20). Amended (2026-09-20). Amended by 0063 (2026-09-29). Amended (2026-10-07).
 
 ## Context
 
@@ -259,3 +259,13 @@ fallback that gives a child event carrying `agent_id` but no agent type the work
 removing it could only loosen the guard for an untyped child event. The Codex CLI sandbox clauses
 and Claude CLI workers' host/tool permissions are unchanged; `reference/orchestrator.md`'s Guarded
 operations section owns the operative boundary.
+
+**Amendment (2026-10-07, issue #478):** The 2026-09-20 block's assignment of reviewer read-only to
+writer denial plus `-s read-only` is replaced. CLI reviewers use independent disposable checkouts of
+the pinned head, with writable execution and network; native Claude retains its session cwd and
+obeys a no-file-write rule. Read-only toward the repository and its remote is written authority:
+never comment, edit a PR or issue, push, or change remote state. The caller publishes the verdict.
+The existing reviewer `gh api` write-flag rule and accepted-residual/Note boundary stay unchanged.
+
+`reference/code-review-prompt.md` carries the repository/remote rule; `reference/orchestrator.md`'s
+Dispatching to an executor section and `reference/harness-codex.md` carry the environment mechanics.

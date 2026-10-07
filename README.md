@@ -95,9 +95,11 @@ pages are self-contained together: the role is complete without the orchestrator
 [judging contract](reference/code-review-prompt.md), which the review-packet script fills from
 current sources, dispatches, and publishes whole on the PR.
 Superpowers bindings live once per role, with Claude worker frontmatter checked against its source.
-Explicit process paths are `codex` for Codex CLI and `claude-cli` for Claude CLI workers; `claude`
-is the native Claude Agent. Claude CLI uses host/tool permissions and the assigned worktree, while
-Codex CLI provides its role sandbox.
+Explicit process paths are `codex` for Codex CLI and `claude-cli` for Claude CLI workers and
+reviewers; `claude` is the native Claude Agent. Workers use their assigned worktree; CLI reviewers
+use an independent disposable checkout of the pinned head. Claude CLI uses host/tool permissions;
+Codex CLI provides its role sandbox, with reviewer `workspace-write` and network. Reviewers are
+read-only toward the repository and its remote and return the verdict for caller publication.
 Other templates and procedures in [`reference/`](reference/) load at their triggers. The supported
 configuration and guard limitations are in [the architecture](docs/architecture.md) and
 [the guard guide](reference/orchestrator.md).

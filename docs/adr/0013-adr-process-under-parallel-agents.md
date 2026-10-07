@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-07-09). Amends 0000 (its supersede-never-edit rule and its
 four-digit sequential numbering). Amended (2026-08-04). Amended (2026-08-13). Amended by 0033
-(2026-08-13). Amended (2026-09-07).
+(2026-08-13). Amended (2026-09-07). Amended (2026-10-07).
 
 ## Context
 
@@ -46,3 +46,9 @@ NNNN (<what it amends>)` in its own status line"*). 0000 has announced `Amended 
 2026-07-09 and again since 2026-08-04; only this side of the pair was missing, and
 `.github/check-adr-index.py` cannot see it because it checks the amended ADR's side alone. The
 decision is unchanged.
+
+**Amendment (2026-10-07, see issue #500):** after PR #498, the numbering-rule pointer in the
+2026-08-04 amendment, relocated on 2026-08-13, now names two sources. `reference/adr.md` carries
+the general number-selection rule. This repository's root `CLAUDE.md`, under **ADRs in this
+repo**, carries the four-place audit and the obligation to record the claimed number and what
+was checked in the PR description.

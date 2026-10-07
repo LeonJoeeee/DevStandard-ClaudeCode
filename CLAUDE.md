@@ -39,8 +39,13 @@ it hardest: 314 words on claiming a free ADR number, a collision we hit because 
 decisions, sitting beside 66 words for the irreversible one. `reference/orchestrator.md`'s Worktree lifecycle section is
 the standard — long exactly where the failure cannot be undone.
 
-**2. A rule is stated in full in exactly one place; every other site carries the trigger and a
-pointer.** One incident used to buy four documents — the CI-fallback family ran to 2,005 words
+**2. A rule is stated in full in exactly one place *within the set of files one reader receives*;
+every other site carries the trigger and a pointer.** Measure it per reader, never across the
+library: whether a reader needs to know something is decided by that reader's function, not by what
+another reader already knows. So the same rule on the orchestrator's page and the worker's page is
+**delivery, not duplication** — they are two prompts delivered whole to two different agents, and
+the reviewer is a third. The defect is one reader's own set saying the same thing twice. One
+incident used to buy four documents — the CI-fallback family ran to 2,005 words
 across five files. Prefer a small file sized to what the pointer asks for over pointing at a large
 file that happens to contain the answer (ADR 0031); `reference/red-check.md` exists for exactly that
 reason.

@@ -146,9 +146,9 @@ def mcp_tool_admission(binary):
     apart from an unreachable server. Measured on codex-cli 0.153.4 (issue #358): `exec` ignores
     every `approval_policy` value, no server-independent configuration field exists, and
     `--approve-for-me` — the one server-independent route — cannot be combined with `-s`, so it
-    would cost the per-role OS sandbox that `reference/orchestrator.md` builds the gating
-    reviewer on. `--dangerously-bypass-approvals-and-sandbox` would cost the same thing. What is
-    left is the per-server key, which composes with both sandbox modes.
+    would remove the scoped sandbox used for workers and reviewer copies.
+    `--dangerously-bypass-approvals-and-sandbox` would cost the same thing. What is
+    left is the per-server key, which composes with that sandbox.
 
     The CLI enumerates the servers, so no host configuration file is read or edited, and a dotted
     override merges into the host's table rather than replacing it, so no server definition is
@@ -491,6 +491,29 @@ def lane_check(project, lane):
             'recorded lane is not a linked worktree')
 
 
+@contextmanager
+def reviewer_checkout(command):
+    """A disposable repository with its own refs/objects, never linked to the judged lane.
+
+    Keep metadata beside the checkout so Codex can fetch through a grant to this copy alone;
+    its workspace-write sandbox protects the checkout's .git entry. No local clone hardlinks
+    or alternates survive --no-local. Fetch the pin explicitly even if it is not a branch tip.
+    """
+    root = Path(command['review_root'])
+    checkout, metadata = root / 'worktree', root / 'git'
+    root.mkdir()  # A collision is not ours to remove; only clean a directory we created.
+    try:
+        run('git', 'clone', '--no-local', '--no-checkout', '--separate-git-dir', str(metadata),
+            command['review_source'], str(checkout))
+        git(checkout, 'fetch', '--no-tags', command['review_source'], command['review_head'])
+        git(checkout, 'remote', 'set-url', 'origin', command['review_origin'])
+        git(checkout, 'checkout', '--detach', command['review_head'])
+        yield
+    finally:
+        if root.exists():
+            shutil.rmtree(root)
+
+
 def supervisor(scratch, lock_fd):
     """Own the inherited lock until a real CLI return is atomically recorded."""
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
@@ -518,13 +541,17 @@ def supervisor(scratch, lock_fd):
         # Every CLI executor takes its prompt on stdin: a packet over Linux's 128 KiB
         # single-argument limit died at exec while it rode argv (#454). `stdout` is optional;
         # without it the child inherits this supervisor's, which is the lane's process log.
-        with open(command['stdin']) as stdin, \
-                (open(command['stdout'], 'w') if command.get('stdout') else nullcontext()) as stdout:
-            child = subprocess.Popen(command['argv'], cwd=command['cwd'], stdin=stdin, stdout=stdout)
-        # A signal arriving during Popen must not leave the just-created child running.
-        if cancelled:
-            child.terminate()
-        code = child.wait()
+        with reviewer_checkout(command) if command.get('review_root') else nullcontext():
+            require(not cancelled, 'launch cancelled during reviewer checkout')
+            with open(command['stdin']) as stdin, \
+                    (open(command['stdout'], 'w') if command.get('stdout') else nullcontext()) as stdout:
+                child = subprocess.Popen(command['argv'], cwd=command['cwd'], stdin=stdin, stdout=stdout)
+            # A signal arriving during Popen must not leave the just-created child running.
+            if cancelled:
+                child.terminate()
+            code = child.wait()
+        # Completion means the reviewer copy has also been removed. Retain only lifecycle
+        # evidence in run scratch; a setup/cleanup error never falls back to the lane cwd.
         tmp = scratch / 'exit-code.tmp'
         tmp.write_text(str(code) + '\n')
         tmp.replace(scratch / 'exit-code')
@@ -593,7 +620,7 @@ def main():
     parser.add_argument('issue', type=int)
     parser.add_argument('--purpose', choices=['worker', 'reviewer'])
     parser.add_argument('--implementation', choices=['codex', 'claude', 'claude-cli'],
-                        help='codex: Codex CLI process; claude: native Claude Agent; claude-cli: Claude CLI worker')
+                        help='codex: Codex CLI process; claude: native Claude Agent; claude-cli: Claude CLI worker/reviewer')
     parser.add_argument('--model', help="explicit model override; otherwise use the role's anchored row")
     parser.add_argument('--effort', help="explicit effort override; otherwise use the role's anchored setting")
     parser.add_argument('--project', type=Path, default=Path.cwd(), help='target checkout, distinct from plugin installation')
@@ -616,8 +643,6 @@ def main():
     require(args.issue > 0, 'issue must be positive')
     require(not args.wait or (args.implementation in ('codex', 'claude-cli')
             and not any((args.adopt, args.cleanup, args.reconcile_lost))), '--wait requires CLI dispatch, not native or maintenance actions')
-    require(not (args.implementation == 'claude-cli' and args.purpose == 'reviewer'),
-            'Claude CLI does not provide an enforced read-only reviewer sandbox; use --implementation codex')
     require(not args.reconcile_lost or not any((args.purpose, args.implementation, args.base, args.branch,
             args.worktree, args.packet, args.brief, args.continuing, args.adopt, args.pr, args.resume,
             args.cleanup, args.discard, args.wait, args.model, args.effort)),
@@ -770,12 +795,17 @@ def main():
         require(extra, 'missing brief')
     model, effort = route_setting(args.purpose, implementation, args.model, args.effort)
     reviewer_identity = (f'Codex, {model} at {effort}, read-only' if implementation == 'codex'
-                         else f'Claude subagent, {model} at {effort}, read-only')
+                         else f'Claude {"CLI" if implementation == "claude-cli" else "subagent"}, {model} at {effort}, read-only')
+    review_head = None
     if args.purpose == 'reviewer':
         require(args.packet, 'reviewer requires --packet with the complete caller-assembled contract')
         role = reviewer_role(args.packet.read_text(), reviewer_identity)
         if implementation == 'claude':
             role += pinned_evidence(wt, args.packet.read_text())
+        else:
+            review_head = review_packet.decode(args.packet.read_text())['slots']['HEAD_SHA']
+            require(re.fullmatch(r'(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})', review_head), 'head must be a full SHA')
+            git(wt, 'rev-parse', '--verify', f'{review_head}^{{commit}}')
     else:
         # One contract for every executor: the page carries no template slot, because the packet
         # already carries the issue, branch, worktree and done-check it used to duplicate, and a
@@ -829,11 +859,16 @@ def main():
     # subagent (#332) and `claude-cli`, which launches `--agent devstandard:worker` below — so
     # the brief carries the packet alone there and the page arrives exactly once (#411). It rides
     # the brief only where no definition can carry it: `codex`, and a Claude reviewer, whose judging contract is assembled per review rather than installed.
-    # `--implementation claude-cli --purpose reviewer` is refused above; the purpose is named here
-    # so this condition holds on its own terms.
     definition_carries_role = (implementation in ('claude', 'claude-cli')
                                and args.purpose == 'worker')
     prompt = packet if definition_carries_role else role + packet
+    cwd = wt
+    review_root = scratch / 'review' if review_head else None
+    if review_root:
+        cwd = review_root / 'worktree'
+        prompt += (f'\nReview environment: {cwd}, an independent disposable checkout of {review_head}. '
+                   'The Worktree field names the judged lane, never your working directory. '
+                   'Work only in this copy; use pinned Git objects for evidence after any experiment.\n')
     (scratch / 'brief.txt').write_text(prompt)
     if not existing:
         git(project, 'worktree', 'add', '-b', lane['branch'], str(wt), lane['base'])
@@ -841,6 +876,8 @@ def main():
     record = dict(lane, kind='run', purpose=args.purpose, implementation=implementation,
                   model=model, effort=effort, brief=str(scratch / 'brief.txt'), pr=pr['url'] if pr else None,
                   issue_state=issue['state'].lower())
+    if review_root:
+        record.update(review_checkout=str(cwd), review_git_dir=str(review_root / 'git'), review_head=review_head)
     if pr_note:
         record['pr_note'] = pr_note
     if rebase_continuation:
@@ -868,25 +905,27 @@ def main():
         log, completion, failure = [scratch / name for name in ('process.log', 'exit-code', 'launch-failure')]
         if implementation == 'claude-cli':
             command = dict(argv=[shutil.which('claude'), '--print', '--plugin-dir', str(ROOT),
-                '--agent', 'devstandard:worker', '--permission-mode', 'acceptEdits', '--permission-prompts', 'none',
+                '--agent', f'devstandard:{args.purpose}', '--permission-mode', 'acceptEdits', '--permission-prompts', 'none',
                 '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--model', model, '--effort', effort],
-                cwd=str(wt), stdin=str(scratch / 'brief.txt'), stdout=str(output))
+                cwd=str(cwd), stdin=str(scratch / 'brief.txt'), stdout=str(output))
             record.update(permission_mode='acceptEdits', sandbox='host', output_format='stream-json',
                           notice='Claude CLI uses host/tool permissions, not an independent OS sandbox. Read all result events and their permission_denials in the raw JSONL output, including earlier results; the last result and process exit alone are not task acceptance. Return a required-action denial as blocked; never bypass it.')
         else:
             argv = [shutil.which('codex'), 'exec', '-m', model, '-c', f'model_reasoning_effort={effort}',
-                    '-s', 'workspace-write' if args.purpose == 'worker' else 'read-only', '-C', str(wt)]
+                    '-s', 'workspace-write', '-C', str(cwd)]
             argv += ['-c', 'features.hooks=true']
             for setting in codex_hook_config(ROOT, args.purpose).splitlines():
                 argv += ['-c', setting]
             # Only alongside the fixed role hook from this dispatcher's installation, checked
             # to exist above. Codex intends the flag for automation that already vets hook sources.
             argv += ['--dangerously-bypass-hook-trust']
+            argv += ['-c', 'sandbox_workspace_write.network_access=true']  # Git history and gh need the network
             if args.purpose == 'worker':
-                argv += ['-c', 'sandbox_workspace_write.network_access=true']  # fetch, push and gh need the network
                 for flag in ('--git-common-dir', '--git-dir'):
                     argv += ['--add-dir', git(wt, 'rev-parse', '--path-format=absolute', flag)]
-            # Both purposes: the sandbox modes above are what bound a reviewer, not its tools.
+            else:
+                argv += ['--add-dir', str(review_root / 'git')]
+            # Reviewer grants reach only its copy; the role forbids repository/remote writes.
             admitted, mcp_notice = mcp_tool_admission(argv[0])
             for name in admitted:
                 argv += ['-c', f'mcp_servers.{name}.default_tools_approval_mode="approve"']
@@ -896,7 +935,17 @@ def main():
             # `-` is the CLI's documented "read the prompt from stdin". A brief is as long as the
             # issue record it carries, and one over 128 KiB cannot be an argument at all (#454).
             argv += ['-o', str(output), '-']
-            command = dict(argv=argv, cwd=str(wt), stdin=str(scratch / 'brief.txt'))
+            command = dict(argv=argv, cwd=str(cwd), stdin=str(scratch / 'brief.txt'))
+        if review_root:
+            origin = git(wt, 'remote', 'get-url', 'origin')
+            # Local relative URLs are interpreted from the invoking checkout. Moving the
+            # reviewer must preserve that target, as it preserves HTTP/SSH/absolute URLs.
+            if not re.match(r'[^/]*:', origin):
+                origin_path = Path(origin).expanduser()
+                origin = str(resolved(origin_path if origin_path.is_absolute() else wt / origin_path,
+                                      'review upstream'))
+            command.update(review_root=str(review_root), review_source=str(wt), review_head=review_head,
+                           review_origin=origin)
         (scratch / 'command.json').write_text(json.dumps(command))
         lock = scratch / 'supervisor.lock'
         with lock.open('x+') as ownership, open(os.devnull) as stdin, log.open('w') as stdout:

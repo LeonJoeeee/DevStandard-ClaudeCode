@@ -4,7 +4,7 @@
 No external model calls, permission bypass, global settings edits or production
 checkout changes. Requires Python 3.11+ and the Claude CLI. The isolated invocation
 keeps HOME unchanged, ignores user/project/local settings, disables external MCP,
-and permits only the fixture's harmless Bash printf commands. Stored logs include
+and permits deterministic fixture commands, with writes confined to disposable copies. Logs include
 the fixture requests and CLI events, never real authentication headers.
 """
 
@@ -187,7 +187,7 @@ class AnthropicFixture:
     this probe to exercise a refusal at all (`reference/orchestrator.md`, The role hook).
     """
 
-    def __init__(self, forbidden, native_role=None, diagnostic=None, parent_denial=False):
+    def __init__(self, forbidden, native_role=None, diagnostic=None, parent_denial=False, allowed_command=None):
         self.requests = []
         self.child_requests = []
         self.main_requests = []
@@ -236,6 +236,8 @@ class AnthropicFixture:
                         block = {'type': 'tool_use', 'id': 'toolu_devstandard_parent_denied',
                                  'name': 'Bash', 'input': {
                                      'command': "printf '%s\\n' '" + DENY + "' merge"}}
+                    if logical_step == 1 and allowed_command and block.get('name') == 'Bash':
+                        block['input']['command'] = allowed_command
                     uses_tool = block['type'] == 'tool_use'
                     events = [
                         ('message_start', {'type': 'message_start', 'message': {
@@ -417,7 +419,7 @@ def runtime(binary, fixture_dir, log_dir, role):
             'plugin': plugins[0], 'allowed': 'executed', 'forbidden': 'denied by role hook'}
 
 
-def dispatch_cli(binary, log_dir, native_background=False):
+def dispatch_cli(binary, log_dir, native_background=False, purpose="worker"):
     """Run the real dispatcher/supervisor/Claude chain; only GitHub is simulated.
 
     Reuse the command-level tests' real Git fixture and controlled gh executable.
@@ -428,12 +430,24 @@ def dispatch_cli(binary, log_dir, native_background=False):
     case = case_type()
     case.setUp()
     record = None
-    label = 'dispatch-cli-native' if native_background else 'dispatch-cli'
+    label = 'dispatch-cli-native' if native_background else 'dispatch-cli-reviewer' if purpose == 'reviewer' else 'dispatch-cli'
+    pin = None
+    lane = None
+    if purpose == 'reviewer':
+        (case.project / 'evidence.txt').write_text('pinned evidence')
+        case.git('add', '.'); case.git('commit', '-m', 'pinned evidence')
+        pin = case.git('rev-parse', 'HEAD')
+        branch, lane = case.hand_made_lane()
+        case.call('--adopt', '--branch', branch, '--worktree', str(lane), '--base', 'origin/main')
+        (lane / 'evidence.txt').write_text('later evidence')
+        case.git('-C', str(lane), 'add', '.'); case.git('-C', str(lane), 'commit', '-m', 'later')
+    allowed_command = ("printf '%s\n' '" + ALLOW + "' && git rev-parse HEAD && "
+                       "printf '%s' 'reviewer experiment' > evidence.txt && cat evidence.txt") if pin else None
     try:
-        with AnthropicFixture('gh api -X' if native_background else 'merge',
+        with AnthropicFixture('gh api -X' if native_background or purpose == 'reviewer' else 'merge',
                               native_role='reviewer' if native_background else None,
                               diagnostic=log_dir / (label + '.requests.json'),
-                              parent_denial=native_background) as fixture:
+                              parent_denial=native_background, allowed_command=allowed_command) as fixture:
             keep = ('HOME', 'USER', 'LOGNAME', 'PATH', 'LANG', 'LC_ALL', 'TMPDIR',
                     'ISSUE', 'COMMENTS', 'PR', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM')
             case.env = {key: value for key, value in case.env.items() if key in keep}
@@ -448,7 +462,7 @@ def dispatch_cli(binary, log_dir, native_background=False):
                          '--mcp-config', '{"mcpServers":{}}', '--no-chrome',
                          '--disable-slash-commands', '--tools',
                          'Bash,Read,Write,Edit' + (',Agent' if native_background else ''),
-                         '--allowedTools', 'Bash(printf *)']
+                         '--allowedTools', 'Bash' if purpose == 'reviewer' else 'Bash(printf *)']
             if native_background:
                 isolation += ['--allowedTools', 'Agent']
             case.tool('claude', 'import json,os,sys\nfrom pathlib import Path\n'
@@ -457,7 +471,9 @@ def dispatch_cli(binary, log_dir, native_background=False):
                 + 'role=os.environ.get("DEVSTANDARD_ROLE"),argv=sys.argv[1:])))\n'
                 + 'os.execv(' + repr(binary) + ',[' + repr(binary)
                 + ',*sys.argv[1:],*' + repr(isolation) + '])\n')
-            record = case.start('--implementation', 'claude-cli')
+            record = (case.call('--purpose', 'reviewer', '--implementation', 'claude-cli',
+                                '--packet', str(case.review_packet(head=pin))) if pin else
+                      case.start('--implementation', 'claude-cli'))
             completion = Path(record['completion'])
             deadline = time.monotonic() + 45
             while not completion.exists() and time.monotonic() < deadline:
@@ -479,9 +495,9 @@ def dispatch_cli(binary, log_dir, native_background=False):
                     'dispatcher fixture did not complete its local request sequence')
             invocation = json.loads(metadata.read_text())
             shutil.copy2(metadata, log_dir / (label + '.invocation.json'))
-            require(invocation['cwd'] == record['worktree'], 'Claude did not use assigned worktree')
+            require(invocation['cwd'] == record['review_checkout' if pin else 'worktree'], 'Claude did not use assigned cwd')
             require(invocation['sid'] == record['pid'], 'Claude did not retain detached supervisor session')
-            require(invocation['role'] == 'worker', 'dispatcher omitted process role marker')
+            require(invocation['role'] == purpose, 'dispatcher omitted process role marker')
             content = json.dumps(fixture.requests[0], ensure_ascii=False)
             # Compare the unescaped source in serialized request text by first
             # finding the raw input content blocks; JSON escaping is not delivery.
@@ -499,25 +515,33 @@ def dispatch_cli(binary, log_dir, native_background=False):
             # not report it (#405). Both Claude paths now carry the role the same way, through
             # the definition body, so this is `role_page_carrier`'s assertion on both.
             host_text = '\n'.join(text_fragments(fixture.requests[0]))
-            delivery = role_page_carrier(host_text, 'worker', label, log_dir)
-            for source in WORKER_BODY_SOURCES:
-                require((ROOT / source).read_text() not in brief,
-                        source + ' was duplicated into the dispatch brief')
-            require(brief.lstrip('\n').startswith('# Task packet'),
-                    'the dispatch brief does not open with the task packet alone')
-            # The Codex worker-facing section must not reach a Claude executor at all — a worker
-            # sent the other harness's lookups would recover a lost binding by a route its host
-            # has not.
-            codex_page = (ROOT / 'reference/harness-codex.md').read_text()
-            codex_mechanics = codex_page.split('<!-- BEGIN CODEX WORKER MECHANICS -->\n', 1)[1] \
-                                        .split('<!-- END CODEX WORKER MECHANICS -->\n', 1)[0]
-            require(codex_mechanics.strip() and codex_mechanics.strip() not in brief,
-                    'the Codex worker mechanics reached a Claude executor')
-            (log_dir / (label + '.role-delivery.json')).write_text(json.dumps(
-                dict(delivery, counted_over='the whole host request, system prompt included',
-                     brief_carrier='scripts/dispatch brief on the worker CLI stdin: the task '
-                                   'packet alone, no role page',
-                     brief_bytes=len(brief.encode())), indent=2) + '\n')
+            if purpose == 'worker':
+                delivery = role_page_carrier(host_text, 'worker', label, log_dir)
+                for source in WORKER_BODY_SOURCES:
+                    require((ROOT / source).read_text() not in brief,
+                            source + ' was duplicated into the dispatch brief')
+                require(brief.lstrip('\n').startswith('# Task packet'),
+                        'the dispatch brief does not open with the task packet alone')
+                # The Codex worker-facing section must not reach a Claude executor at all — a worker
+                # sent the other harness's lookups would recover a lost binding by a route its host
+                # has not.
+                codex_page = (ROOT / 'reference/harness-codex.md').read_text()
+                codex_mechanics = codex_page.split('<!-- BEGIN CODEX WORKER MECHANICS -->\n', 1)[1] \
+                                            .split('<!-- END CODEX WORKER MECHANICS -->\n', 1)[0]
+                require(codex_mechanics.strip() and codex_mechanics.strip() not in brief,
+                        'the Codex worker mechanics reached a Claude executor')
+                (log_dir / (label + '.role-delivery.json')).write_text(json.dumps(
+                    dict(delivery, counted_over='the whole host request, system prompt included',
+                         brief_carrier='scripts/dispatch brief on the worker CLI stdin: the task '
+                                       'packet alone, no role page',
+                         brief_bytes=len(brief.encode())), indent=2) + '\n')
+            else:
+                body = (ROOT / 'agents/reviewer.md').read_text().split('---\n', 2)[2]
+                require(host_text.count(body) == 1, 'reviewer role definition not delivered once')
+                require('never comments' in message_text and 'never pushes' in message_text,
+                        'reviewer repository/remote rule missing from brief')
+                writers = {'Write', 'Edit', 'NotebookEdit'} & {tool['name'] for tool in fixture.requests[0]['tools']}
+                require(not writers, 'dispatched reviewer exposes built-in writers')
             require('Issue: https://github.com/o/r/issues/12' in message_text,
                     'dynamic issue packet did not reach Claude through brief stdin')
             require('DevStandard operating context: reference/orchestrator.md' not in content,
@@ -530,7 +554,7 @@ def dispatch_cli(binary, log_dir, native_background=False):
             denied = next(block for block in tool_results if block['tool_use_id'] == 'toolu_devstandard_2')
             require(not allowed.get('is_error') and ALLOW in json.dumps(allowed),
                     'dispatched Claude did not execute the harmless allowed command')
-            expected_role = 'reviewer' if native_background else 'worker'
+            expected_role = 'reviewer' if native_background else purpose
             require(denied.get('is_error') and expected_role + ' role refuses' in json.dumps(denied),
                     'dispatched Claude did not apply worker hook denial')
             required_id = 'toolu_devstandard_parent_denied' if native_background else 'toolu_devstandard_2'
@@ -545,6 +569,12 @@ def dispatch_cli(binary, log_dir, native_background=False):
                 require(not any(row.get('tool_use_id') == required_id
                                 for row in results[-1].get('permission_denials', [])),
                         'fixture did not exercise a later result without the earlier denial')
+            if pin:
+                require(pin in json.dumps(allowed) and 'reviewer experiment' in json.dumps(allowed),
+                        'Claude reviewer did not read pinned head and write in the copy')
+                require(case.git('-C', str(lane), 'status', '--porcelain', '-uall') == '', 'Claude review dirtied lane')
+                require((lane / 'evidence.txt').read_text() == 'later evidence', 'Claude review changed lane file')
+                require(not Path(record['review_checkout']).parent.exists(), 'Claude review copy survived completion')
             require(all(row.get('output_config', {}).get('effort') == 'max'
                         for row in fixture.requests), 'dispatched effort did not reach model API')
             return {'role': label, 'requests': len(fixture.requests),
@@ -580,6 +610,7 @@ def main():
         if args.dispatch_cli:
             results.append(dispatch_cli(args.claude, args.log_dir))
             results.append(dispatch_cli(args.claude, args.log_dir, native_background=True))
+            results.append(dispatch_cli(args.claude, args.log_dir, purpose='reviewer'))
     version = subprocess.check_output([args.claude, '--version'], text=True).strip()
     print(json.dumps({'status': 'pass', 'claude': version, 'cases': results}, indent=2))
 

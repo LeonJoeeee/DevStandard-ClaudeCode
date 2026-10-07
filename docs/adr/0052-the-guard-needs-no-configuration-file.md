@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-09-10). Amends 0046 (authorization record, founding admission) and 0051 (the
 policy read). Amended by 0056 (2026-09-11). Amended (2026-09-13). Amended (2026-09-20). Amended by
-0062 (2026-09-20). Amended by 0063 (2026-09-29).
+0062 (2026-09-20). Amended by 0063 (2026-09-29). Amended (2026-10-07).
 
 ## Context
 
@@ -143,3 +143,11 @@ retired words moved from its refusal table to a table of the benign work each on
 applies to the Codex CLI; Claude-native and Claude CLI workers retain host/tool permissions and
 their assigned-worktree duty. The guard still has no configuration file;
 `reference/orchestrator.md`'s Dispatching to an executor section owns the implementation boundaries.
+
+**Amendment (2026-10-07, issue #478):** the Decision's per-role OS sandbox clause and its later
+implementation amendments no longer assign reviewer independence to an OS read-only sandbox.
+Codex CLI reviewers use `workspace-write` with network in an independent pinned checkout; Claude
+CLI reviewers use the same copy arrangement. Both remain read-only toward the judged repository
+and its remote by their written role. Native Claude reviewers inherit the session's directory,
+with the written no-file-write rule and built-in writer denial. The worker's sandbox, the hook's
+reviewer `gh api` write-flag refusal, zero configuration and accepted residual are unchanged.

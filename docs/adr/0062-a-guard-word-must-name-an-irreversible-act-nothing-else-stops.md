@@ -1,7 +1,7 @@
 # 0062 — A guard word must name an irreversible act nothing else stops
 
 Status: Accepted (2026-09-20). Amends 0051 (the role lists, the re-spelling detour) and 0052
-(release is not the hook's business). Amended (2026-09-20).
+(release is not the hook's business). Amended (2026-09-20). Amended (2026-10-07).
 
 ## Context
 
@@ -111,3 +111,15 @@ open instead: the call is admitted and one line on stderr names the error. The t
 worker's default-branch `push` are untouched, and `.github/test-hard-edges.py` gains a case that
 injects an exception into the decision and asserts admission with that warning. See 0051's block of
 the same date for the reasoning.
+
+**Amendment (2026-10-07, issue #478):** The Decision table's reviewer rationale and the residual's
+read-only assignment no longer rest on Codex `-s read-only`. Both CLI reviewers run in independent
+disposable pinned-head checkouts, with Codex `workspace-write` and network plus a grant to the
+copy's Git metadata only. Native Claude keeps the session cwd and follows the written no-file-write
+rule. All reviewer carriers forbid repository and remote changes: no comments, PR or issue edits,
+pushes, or remote state changes; the caller publishes the verdict. Claude's built-in writer denial
+and the existing reviewer `gh api` write-flag hook remain. The keep-bar, ordinary-case residual and
+Goal/Floor/Notes contract are unchanged.
+
+`reference/code-review-prompt.md` carries the repository/remote rule; `reference/orchestrator.md`'s
+Dispatching to an executor section and `reference/harness-codex.md` carry the environment mechanics.

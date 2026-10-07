@@ -2,7 +2,7 @@
 
 Status: Amended by 0050 (2026-09-09). Accepted (2026-08-25). Amended by 0045 (2026-09-05). Amended by 0038 (2026-08-26). Amended by 0040 (2026-08-26). Amended by 0047 (2026-09-07). Amended (2026-09-07). Amended (2026-09-11). Extends 0008 (the ladder's executors; the rungs, run sizing and
 rationing are unchanged). Cites 0024 without amending it: the cap and the tier names stand for every
-agent this method spawns through its own harness, and do not reach a process it does not spawn. Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04).
+agent this method spawns through its own harness, and do not reach a process it does not spawn. Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04). Amended (2026-10-07).
 
 ## Context
 
@@ -171,3 +171,12 @@ reviewers default to Codex CLI, with the human still selecting another supported
 dispatch or standing. `reference/orchestrator.md`'s Dispatching to an executor and Model and effort
 sections carry the operative choice and settings; the removed `reference/external-agent.md`
 pointer is retired. The executor slot and fallback preserving gate properties remain unchanged.
+
+**Amendment (2026-10-07, issue #478):** the Decision's Sandbox by role clause no longer makes
+reviewer read-only authority an OS-enforced constraint. CLI reviewers judge an independent
+one-off checkout of the pinned head; Codex uses `workspace-write` and network, and Claude CLI
+uses the same copy with host/tool permissions. Their written rule forbids repository and remote
+changes, with disposable experiments confined to the copy and verdict publication owned by the
+caller. Native Claude retains the session cwd, the written no-file-write rule and built-in writer
+denial. Worker sandbox/grants, the no-bypass rule and the reviewer `gh api` write-flag hook remain.
+The unavailable-executor fallback still preserves the judging contract and never lowers it.

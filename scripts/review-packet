@@ -234,8 +234,8 @@ def ci_fallback(project, repo, url):
     """The published CI-FALLBACK comment this review is commissioned under, or NONE.
 
     #298 item 2: the slot was hardwired, so `reference/ci-cannot-run.md`'s fallback could never be
-    commissioned through the assembler. The reviewer is a clean context that cannot open a link, so
-    the comment's whole text travels with its URL. This validates an operator's argument, exactly as
+    commissioned through the assembler. The comment's whole text travels with its URL so the clean
+    reviewer receives the complete audit context without a later read. This validates an operator's argument, exactly as
     `--accepted-spec` does; it is not a packet-integrity check.
     """
     if not url:

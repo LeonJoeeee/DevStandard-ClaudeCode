@@ -1,6 +1,6 @@
 # 0064 — Codex is the default executor for the anchored roles; the method names Codex models and Claude tier aliases, never a cross-harness pairing
 
-Status: Accepted (2026-10-04). Amends 0050 (its 2026-09-29 block's anchors, tier-equivalence basis, helper routing and arbitration fallback) and 0040 (its 2026-09-11 block's reversal of the executor preference). Also amends 0009, 0011, 0036, 0047 and 0060 (their live dispatch-default statements).
+Status: Accepted (2026-10-04). Amends 0050 (its 2026-09-29 block's anchors, tier-equivalence basis, helper routing and arbitration fallback) and 0040 (its 2026-09-11 block's reversal of the executor preference). Also amends 0009, 0011, 0036, 0047 and 0060 (their live dispatch-default statements). Amended (2026-10-07).
 
 **Scope: this ADR decides what the method ships.** It changes which executor is primary and what the pages assert about models.
 
@@ -72,3 +72,13 @@ path is tried first, not what happens when the first path is absent.
 A future re-route of the anchored model is one table cell per role in `reference/orchestrator.md`
 plus an amendment here. No pairing sentence is left to keep in sync, which is the maintenance
 saving this ADR buys.
+
+**Amendment (2026-10-07, issue #478):** The Context's enforced-read-only-sandbox rationale records
+the old implementation, not a remaining executor distinction. Codex and Claude CLI reviewers now use
+independent disposable pinned-head checkouts; Codex runs `workspace-write` with network. Native
+Claude keeps the session cwd under the written no-file-write rule. Reviewer read-only means
+authority toward the repository and its remote, with verdict publication owned by the caller. The
+anchored settings, executor preference, helper routing and arbitration decision are unchanged.
+
+`reference/code-review-prompt.md` carries the repository/remote rule; `reference/orchestrator.md`'s
+Dispatching to an executor section and `reference/harness-codex.md` carry the environment mechanics.

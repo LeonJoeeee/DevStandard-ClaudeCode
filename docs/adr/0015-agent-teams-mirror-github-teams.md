@@ -5,6 +5,7 @@ every-session budget, relaxed to carry the collaboration model inline) and 0009 
 session" invariant). Amended by 0022 (2026-07-24, small-change ceremony exemption). Amended
 (2026-08-22). Amended by 0039 (2026-08-26). Amended by 0047 (2026-09-07). Amended by 0049
 (2026-09-07). Amended (2026-09-07). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
+Amended (2026-10-07).
 
 ## Context
 
@@ -90,3 +91,10 @@ outside the configuration, and dispatch still supplies worker identity.
 orchestrator with its native workers. Codex takes part only as a dispatched CLI worker or read-only
 gating reviewer, its role supplied by the dispatch brief. Separate live-session worker lanes remain
 outside the configuration.
+
+**Amendment (2026-10-07, issue #478):** Decision point 5's *"sees only the diff + the issue"*
+describes the earlier supplied context, not a current restriction on independent evidence reads.
+The complete review packet is the reviewer's primary judging context; repository and network
+reads are available, with CLI reviewers in an independent pinned checkout. Clean context still
+means no anchoring on the cockpit's accumulated session history. The judging contract and the
+cockpit's integration authority are unchanged.

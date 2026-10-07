@@ -3,7 +3,7 @@
 
 Requires Python 3.11+ and Codex CLI 0.153.4+. No user configuration, trust record,
 marketplace, HOME, or CODEX_HOME is changed. Existing rules remain in force.
-The only model output is this fixture's two harmless printf calls and final text.
+The model output is deterministic probes and final text; writes stay in disposable fixtures.
 
 Codex no longer hosts the method (#459, ADR 0063); what it still does is run a worker or a
 read-only gating review that a Claude Code orchestrator dispatches. So every case here runs the
@@ -18,6 +18,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import shlex
 import shutil
 import subprocess
@@ -106,8 +107,10 @@ def inventory(fixture):
 
 
 class ResponsesFixture:
-    def __init__(self, forbidden):
+    def __init__(self, forbidden, allowed_command=None):
         self.forbidden = forbidden
+        self.allowed_command = allowed_command
+        self.history_reads = 0
         self.requests = []
         self.errors = []
         outer = self
@@ -117,6 +120,14 @@ class ResponsesFixture:
                 pass
 
             def do_GET(self):
+                if self.path == '/history':
+                    outer.history_reads += 1
+                    body = b'NETWORK_HISTORY_READ_478'
+                    self.send_response(200)
+                    self.send_header('Content-Length', str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
                 # Custom providers are queried for model metadata before the first turn.
                 # An empty catalog deliberately selects Codex's fallback metadata.
                 if self.path.split('?', 1)[0] != '/v1/models':
@@ -190,12 +201,12 @@ class ResponsesFixture:
         # operand. It used to sit inside the quoted format string; since #351 the hook does
         # not read quoted text, so the word has to stand in the command itself for this
         # probe to exercise a refusal (`reference/orchestrator.md`, The role hook).
-        command = ('printf ' + shlex.quote(ALLOW + '\n') if index == 0 else
+        command = ((self.allowed_command or 'printf ' + shlex.quote(ALLOW + '\n')) if index == 0 else
                    'printf ' + shlex.quote(DENY + '\n') + ' ' + self.forbidden)
         return {'type': 'function_call', 'id': 'fc_' + str(index),
                 'call_id': 'call_' + str(index), 'name': 'exec_command',
                 'arguments': json.dumps({'cmd': command, 'login': False,
-                                         'max_output_tokens': 100})}
+                                         'max_output_tokens': 1000 if self.allowed_command else 100})}
 
 
 class McpFixture(ResponsesFixture):
@@ -375,7 +386,7 @@ def tool_results(request):
 
 
 def fixture_settings(port, *, enabled=True):
-    """The `codex exec` settings every shell-hook case shares: local provider, no network."""
+    """The `codex exec` settings every shell-hook case shares: an isolated local provider."""
     return {
         'model_provider': 'devstandard-fixture',
         'model_providers.devstandard-fixture': {
@@ -410,7 +421,10 @@ def run_case(binary, fixture, name, *, role, trusted=False, enabled=True, logs=N
     with ResponsesFixture(forbidden) as server:
         settings = fixture_settings(server.server.server_port, enabled=enabled)
         command = [binary, 'exec', '--ignore-user-config', '--ephemeral', '--json',
-                   '-s', 'read-only', '-C', str(fixture), '-m', 'devstandard-fixture']
+                   '-s', 'workspace-write' if role == 'reviewer' else 'read-only',
+                   '-C', str(fixture), '-m', 'devstandard-fixture']
+        if role == 'reviewer':
+            command += ['-c', 'sandbox_workspace_write.network_access=true']
         for key, value in settings.items():
             command += ['-c', key + '=' + toml(value)]
         # The dispatcher's own hook settings, verbatim: the fixed role hook and its role.
@@ -504,6 +518,73 @@ def run_case(binary, fixture, name, *, role, trusted=False, enabled=True, logs=N
         return summary
 
 
+def dispatch_reviewer(binary, logs):
+    """Real dispatch, copy, CLI, sandbox, hook and cleanup; only model/GitHub are fixtures.
+
+    A lane that has moved since the pin plus a write/fetch/network command catches accidental
+    lane execution, shared Git metadata, a protected copy gitdir or a network-disabled sandbox.
+    """
+    case = runpy.run_path(str(ROOT / '.github/test-dispatch.py'))['DispatchTest']()
+    case.setUp()
+    record = None
+    try:
+        (case.project / 'evidence.txt').write_text('pinned evidence')
+        case.git('add', '.'); case.git('commit', '-m', 'pinned evidence')
+        pin = case.git('rev-parse', 'HEAD')
+        branch, lane = case.hand_made_lane()
+        case.call('--adopt', '--branch', branch, '--worktree', str(lane), '--base', 'origin/main')
+        (lane / 'evidence.txt').write_text('later evidence')
+        case.git('-C', str(lane), 'add', '.'); case.git('-C', str(lane), 'commit', '-m', 'later')
+        refs = case.git('show-ref')
+        with ResponsesFixture('gh api -X') as fixture:
+            probe = ("from pathlib import Path; import urllib.request; "
+                     "print(urllib.request.urlopen('http://127.0.0.1:"
+                     + str(fixture.server.server_port) + "/history',timeout=5).read().decode()); "
+                     "Path('evidence.txt').write_text('reviewer experiment'); "
+                     "print('COPY_WRITE_478')")
+            fixture.allowed_command = ('printf ' + shlex.quote(ALLOW + '\n')
+                + ' && git rev-parse HEAD && git fetch --no-tags ' + shlex.quote(str(lane)) + ' ' + pin
+                + ' && python3 -c ' + shlex.quote(probe))
+            settings = fixture_settings(fixture.server.server_port)
+            overrides = [arg for key, value in settings.items() for arg in ('-c', key + '=' + toml(value))]
+            case.tool('codex', 'import json,os,sys\n'
+                + "if sys.argv[1:3]==['mcp','list']: print('[]'); raise SystemExit(0)\n"
+                + 'args=sys.argv[1:]; args[args.index("-m")+1]="devstandard-fixture"\n'
+                + 'os.execv(' + repr(binary) + ',[' + repr(binary)
+                + ',args[0],"--ignore-user-config","--ephemeral",*args[1:],*'
+                + repr(overrides) + '])\n')
+            case.env.pop('OPENAI_API_KEY', None)
+            record = case.call('--purpose', 'reviewer', '--implementation', 'codex',
+                               '--packet', str(case.review_packet(head=pin)), '--wait')
+            require(record['executor_exit'] == 0, 'dispatched reviewer CLI failed: ' + Path(record['log']).read_text())
+            require(not fixture.errors and len(fixture.requests) == 3, 'reviewer fixture protocol failed')
+            actual = '\n'.join(text_fragments(fixture.requests[0].get('input', [])))
+            brief = Path(record['brief']).read_text()
+            require(actual.count(brief.strip()) == 1, 'complete reviewer brief did not arrive once')
+            outputs = tool_results(fixture.requests[2])
+            allowed = str(outputs.get('call_0', ''))
+            require(pin in allowed and 'COPY_WRITE_478' in allowed and fixture.history_reads == 1
+                    and 'NETWORK_HISTORY_READ_478' in allowed,
+                    'reviewer could not read pin, fetch, write and reach network: ' + allowed[-2500:])
+            require('reviewer role refuses' in str(outputs.get('call_1', '')), 'reviewer write-flag hook missing')
+            require('never comments' in actual and 'never pushes' in actual, 'remote prohibition not delivered')
+            require(case.git('-C', str(lane), 'status', '--porcelain', '-uall') == '', 'review dirtied lane')
+            require(case.git('show-ref') == refs, 'review altered lane refs')
+            require((lane / 'evidence.txt').read_text() == 'later evidence', 'review altered lane file')
+            require(not Path(record['review_checkout']).parent.exists(), 'review copy survived completion')
+            if logs:
+                for key in ('brief', 'output', 'log', 'completion'):
+                    shutil.copy2(record[key], logs / ('dispatch-reviewer.' + Path(record[key]).name))
+                (logs / 'dispatch-reviewer.requests.json').write_text(json.dumps(fixture.requests, indent=2))
+            return {'case': 'dispatch-reviewer', 'status': 'pass', 'pinned_head': pin,
+                    'sandbox': 'workspace-write', 'network': 'HTTP history read',
+                    'git_fetch': 'executed in independent metadata', 'copy_write': 'executed',
+                    'lane_status': 'empty', 'copy_cleanup': 'removed', 'remote_rule': 'delivered',
+                    'guard': 'reviewer gh api write flags denied'}
+    finally:
+        case.doCleanups()
+
+
 def dispatched_worker_prompt(worktree):
     """The prompt `scripts/dispatch --implementation codex` hands `codex exec`.
 
@@ -545,7 +626,7 @@ def main():
     parser.add_argument('--case', choices=['disabled', 'untrusted-before', 'worker',
                                          'untrusted-after', 'reviewer', 'worker-brief',
                                          'mcp-refused-without-the-setting', 'mcp-reviewer',
-                                         'mcp-worker', 'mcp-worker-code-mode'])
+                                         'mcp-worker', 'mcp-worker-code-mode', 'dispatch-reviewer'])
     args = parser.parse_args()
     binary = shutil.which('codex')
     require(binary, 'Codex CLI is required; install the CI-pinned version before this test')
@@ -580,9 +661,9 @@ def main():
                                     carries=(('reference/worker.md',
                                               'reference/harness-codex.md'), carried),
                                     logs=args.log_dir))
-    # The sandbox mode each purpose gets is unchanged; only the MCP admission differs (#358).
-    mcp_cases = [('mcp-refused-without-the-setting', 'read-only', False, None),
-                 ('mcp-reviewer', 'read-only', True, None),
+    # Reviewer admission must compose with its writable copy sandbox (#478).
+    mcp_cases = [('mcp-refused-without-the-setting', 'workspace-write', False, None),
+                 ('mcp-reviewer', 'workspace-write', True, None),
                  ('mcp-worker', 'workspace-write', True, None),
                  # Code mode reaches an MCP tool through `exec`'s JavaScript rather than through
                  # the tool's own namespace, and a dispatched child on a default host runs in
@@ -592,6 +673,8 @@ def main():
                              logs=args.log_dir)
                 for name, sandbox, admit, prefer in mcp_cases
                 if args.case is None or args.case == name]
+    if args.case is None or args.case == 'dispatch-reviewer':
+        results.append(dispatch_reviewer(binary, args.log_dir))
     print(json.dumps({'codex': version, 'isolation': isolation, 'results': results,
                       'not_exercised': ['a remote PR lifecycle', 'production authentication']},
                      ensure_ascii=False))

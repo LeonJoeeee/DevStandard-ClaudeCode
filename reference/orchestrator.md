@@ -177,8 +177,16 @@ checkout; it assembles the whole brief from the issue's ordered record and the c
 supported executor for one dispatch or standing until their next instruction. The choice lives with
 the orchestrator, not in a project file. The default is `--implementation codex`; Codex runs as a
 CLI process, `--implementation codex`, for a worker or an independent read-only gating reviewer
-under `reference/harness-codex.md`. Claude CLI is an explicit worker process, not a qualified gating
-reviewer. Native workers inherit host permissions; Codex CLI workers receive an OS sandbox scoped to
+under `reference/harness-codex.md`. Claude CLI supports workers and reviewers with host/tool
+permissions. CLI reviewers run in an independent one-off checkout of the pinned head; Codex uses
+`workspace-write` with network and a grant only to the copy's Git metadata. The supervisor owns
+creation and removal in run scratch, refuses setup failure without launching, and retains lifecycle
+evidence. A lost supervisor's known copy is disposed of through the existing recovery and cleanup.
+Native Claude review keeps the session directory (Agent has no per-spawn cwd), with the written
+rule forbidding file writes there. All reviewers are read-only toward the repository and its remote:
+no comments, PR or issue edits, pushes, or remote state changes; the caller publishes the verdict.
+Claude's built-in file writers stay denied and the reviewer `gh api` write-flag hook stays.
+Native workers inherit host permissions; Codex CLI workers receive an OS sandbox scoped to
 their lane. Never use a bypass-all-sandboxing mode. Report a blocked required action instead of
 loosening the sandbox.
 

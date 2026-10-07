@@ -760,7 +760,8 @@ ADMITTED_SINCE_THE_SHRINK = {
         ('delete', 'gh repo delete o/r --yes'),
         ('rm', 'rm /tmp/probe'),
         # The list carried no independence of its own: it always admitted these three,
-        # which is why read-only rests on the agent definition and the Codex sandbox.
+        # which is why repository/remote read-only is a written role rule, with CLI copies
+        # isolating experiments and native Claude retaining its built-in writer denial.
         ('the list never stopped these', 'gh pr comment 1 --body x'),
         ('the list never stopped these', 'gh pr review 1 --approve'),
         ('the list never stopped these', 'gh pr edit 1 --add-label x'),
@@ -1070,7 +1071,7 @@ class RoleRuleTest(unittest.TestCase):
             'orchestrator': [('gh pr merge 1 --squash', "'gh pr merge'")],
         }
         instead = {'worker': 'pushes its own task branch',
-                   'reviewer': 'returns a verdict and writes nothing',
+                   'reviewer': 'returns a verdict and never changes the repository or its remote',
                    'orchestrator': 'scripts/guard merge'}
         for role, rows in cases.items():
             for command, word in rows:

@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-08-25). Amends 0018 (its Gotchas kind gains a declared out-of-repo root; the
 one-page fence and the three-kinds rule are unchanged). Amended by 0042 (2026-08-31). Amended
-(2026-09-07).
+(2026-09-07). Amended (2026-10-07).
 
 ## Context
 
@@ -114,3 +114,10 @@ that the write belongs outside the project — and the disclosure duty, which na
 write outside the repo, with its path and reason, in the PR. The Consequences sentence listing which
 files that change touched is history and stays as written. The rule and the narrowed frequency
 defence are unchanged.
+
+**Amendment (2026-10-07, issue #478):** the Consequences' rationale that a clean reviewer cannot
+open this file no longer describes its capabilities. CLI reviewers can read repository files and
+network history from an independent pinned checkout; native Claude reviewers retain the session's
+directory and follow the written prohibition on file changes. The self-contained placement rule
+still belongs in the review prompt so the judging context receives it whole. The placement,
+disclosure and finding rules above are unchanged.

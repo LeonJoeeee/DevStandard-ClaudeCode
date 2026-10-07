@@ -1,6 +1,6 @@
 # 0026 — A PR is owned until its checks report green; the duty transfers with delivery
 
-Status: Accepted (2026-08-03). Extends 0009 and 0022 (the lifecycle's step-3 finish line). Cites 0011 and 0025 without amending them: the two gates, the reviewed-diff-is-the-merged-diff rule and the check-2 fallback stand exactly as written, and RED remains a non-trigger. Amended by 0032 (2026-08-13). Amended (2026-09-07). Amended (2026-09-20).
+Status: Accepted (2026-08-03). Extends 0009 and 0022 (the lifecycle's step-3 finish line). Cites 0011 and 0025 without amending them: the two gates, the reviewed-diff-is-the-merged-diff rule and the check-2 fallback stand exactly as written, and RED remains a non-trigger. Amended by 0032 (2026-08-13). Amended (2026-09-07). Amended (2026-09-20). Amended (2026-10-07).
 
 ## Context
 
@@ -74,3 +74,9 @@ sites carry the trigger … plus the pointer"* still holds with one address corr
 **Amendment (2026-09-20, issue #434):** the 2026-09-07 block's closing *"bounded by the 7-round
 cap"* no longer names a bound. The named goal gap a continuation brief must carry is unchanged; what
 goes is the count as a gate on how many continuations may run. 0046's 2026-09-20 block states it.
+
+**Amendment (2026-10-07, issue #478):** the Consequences' capability rationale for *"Check 1
+cannot verify that a bot finding was answered"* no longer holds: reviewers can read repository
+files and network history, including the PR page. The PR owner's duty to fix or publicly answer
+every bot finding, and the merging session's delivery check, remain unchanged. This capability
+change adds no judging criterion; the canonical Goal/Floor/Notes contract still defines check 1.

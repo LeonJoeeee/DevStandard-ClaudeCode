@@ -932,12 +932,101 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
 
     def test_missing_claim_and_unfilled_issue_refuse(self):
         pr=json.loads(self.prfile.read_text());pr['body']='';self.prfile.write_text(json.dumps(pr))
-        self.assertIn('description',self.assemble(ok=False))
+        result = self.assemble()
+        brief = Path(result['brief']).read_text()
+        self.assertIn('COMPLETE_PR_DESCRIPTION: filled with empty text', brief)
+        self.assertIn('## Packet integrity', brief)
+        shutil.rmtree(self.out)
         pr['body']='Evidence.';self.prfile.write_text(json.dumps(pr))
         issue=json.loads(self.d.issue.read_text());issue['body']=issue['body'].replace('Produce evidence.','{GOAL}')
         self.d.issue.write_text(json.dumps(issue))
         self.assertIn('placeholder',self.assemble(ok=False))
         self.assertFalse(self.out.exists())
+
+    def test_lane_repo_and_branch_mismatches_are_packet_integrity_gaps(self):
+        original = self.d.comments.read_text()
+        for field, value in (('repo', 'other/repository'), ('branch', 'task/other')):
+            with self.subTest(field=field):
+                rows = json.loads(original)
+                rows[0]['body'] = rows[0]['body'].replace(
+                    json.dumps(field) + ': ' + json.dumps('o/r' if field == 'repo' else self.branch),
+                    json.dumps(field) + ': ' + json.dumps(value))
+                self.d.comments.write_text(json.dumps(rows))
+                result = self.assemble()
+                brief = Path(result['brief']).read_text()
+                report = brief.split('## Packet integrity', 1)[1]
+                self.assertIn('recorded issue lane', report)
+                self.assertIn(value, report)
+                self.assertIn(self.head, report)
+        self.d.comments.write_text(original)
+
+    def test_goal_fix_reason_travels_with_start_and_its_reservation(self):
+        self.write_verdict(goal='No'); self.start('--wait'); self.published()
+        reason = 'Repair the stated goal gap.'
+        first_write = self.root/'first-reservation.json'
+        self.env['FIRST_RESERVATION'] = str(first_write)
+        gh = self.d.bin/'gh'
+        gh.write_text(gh.read_text().replace("row=dict(id=len(rows)+100,body=payload['body']",
+            "if os.environ.get('FIRST_RESERVATION'): Path(os.environ['FIRST_RESERVATION']).write_text(payload['body'])\n"
+            "   row=dict(id=len(rows)+100,body=payload['body']"))
+        result = self.start('--reason', reason, '--wait')
+        self.assertEqual(result['round'], 2)
+        rows = json.loads(self.prcomments.read_text())
+        self.assertEqual(len(rows), 2, 'the reservation must carry the decision in one comment')
+        record = json.loads(rows[-1]['body'].split('```json\n')[1].split('\n```')[0])
+        self.assertEqual(record['continuation']['reason'], reason)
+        self.assertEqual(record['continuation']['decision'], 'continue')
+        self.assertEqual(record['continuation']['head'], self.head)
+        self.assertEqual(record['continuation']['round'], 1)
+        reserved = json.loads(first_write.read_text().split('```json\n')[1].split('\n```')[0])
+        self.assertEqual(reserved['status'], 'reserved')
+        self.assertEqual(reserved['continuation'], record['continuation'])
+        self.assertEqual(record['status'], 'returned', 'publication must retain the decision')
+
+    def test_goal_fix_start_requires_reason_without_mutation(self):
+        self.write_verdict(goal='No'); self.start('--wait'); self.published()
+        before = self.prcomments.read_text()
+        self.assertIn('reason', self.start_without_reason_error())
+        self.assertEqual(self.prcomments.read_text(), before)
+
+    def test_duplicate_round_does_not_inherit_an_earlier_merge_as_is(self):
+        self.write_verdict(goal='No'); self.start('--wait'); self.published()
+        self.call('rule', '--decision', 'merge-as-is', '--reason', 'Settle the first verdict.')
+        rows = json.loads(self.prcomments.read_text())
+        rows.append(dict(rows[0], id=102))
+        self.prcomments.write_text(json.dumps(rows))
+        status = self.call('status')
+        self.assertEqual(status['next'], 'goal-fix-decision')
+        self.assertIsNone(status['ruling'])
+
+    def test_inline_continuation_is_the_operative_ruling_until_its_verdict_returns(self):
+        self.write_verdict(goal='No'); self.start('--wait'); self.published()
+        self.call('rule', '--decision', 'merge-as-is', '--reason', 'Settle the first verdict.')
+        self.start('--implementation', 'claude', '--reason', 'Repair the goal gap.')
+        status = self.call('status')
+        self.assertEqual(status['ruling']['decision'], 'continue')
+        self.assertEqual(status['ruling']['reason'], 'Repair the goal gap.')
+        self.assertEqual(status['ruling']['comment_id'], status['active'][0]['comment_id'])
+
+    def start_without_reason_error(self):
+        return self.call('start', '--architecture-level', 'no', '--output', str(self.out),
+                         '--implementation', 'claude', ok=False)
+
+    def test_history_accounting_warns_on_legacy_and_irregular_rounds(self):
+        for numbers in ((None,), (0,), ('01',), (1, 3), (1, 1), (3, 2)):
+            with self.subTest(numbers=numbers):
+                self.prcomments.write_text(json.dumps([dict(id=100+i,
+                    body=('## Merge check 1' + (f' — round {n}' if n is not None else '') + '\n\n'
+                          + self.verdict.read_text())) for i, n in enumerate(numbers)]))
+                result = self.invoke('status')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                status = json.loads(result.stdout)
+                self.assertEqual(status['rounds'], len(numbers))
+                self.assertEqual(status['last']['comment_id'], 99+len(numbers))
+                if numbers[-1] is not None:
+                    self.assertEqual(status['last']['round'], int(numbers[-1]))
+                self.assertTrue(status['warnings'])
+                self.assertIn('warning', result.stderr)
 
     def test_wait_keeps_origin_alive_through_whole_verdict_publication(self):
         self.env['FAKE_HOLD'] = str(self.root/'executor-release')
@@ -1073,7 +1162,7 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         finally:
             sys.path.pop(0)
         rows = json.loads(self.prcomments.read_text())
-        with self.assertRaisesRegex(guard['Refusal'], 'active'):
+        with self.assertRaisesRegex(guard['Refusal'], 'no whole'):
             guard['merge_acceptance'](rows, self.head)
         before = self.call('status')
         self.assertEqual((before['rounds'], len(before['active'])), (0, 1))
@@ -1265,7 +1354,7 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         for round_number in range(1,8):
             if round_number>1:
                 self.call('rule','--decision','continue','--reason','Obtain the missing evidence.')
-            result=self.start()
+            result=self.start(*(['--reason', 'Obtain the missing evidence.'] if round_number>1 else []))
             # Explicit publication is recoverable and does not require inline waiting by start.
             deadline=time.monotonic()+12
             while time.monotonic()<deadline:
@@ -1279,7 +1368,7 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.assertEqual(self.call('status')['cap'],7)
         self.call('rule','--decision','continue','--reason','One more round of evidence.')
         eighth=self.invoke('start','--architecture-level','no','--output',str(self.out),
-                           '--implementation','codex')
+                           '--implementation','codex','--reason','One more round of evidence.')
         self.assertEqual(eighth.returncode,0,eighth.stdout+eighth.stderr)
         self.assertEqual(json.loads(eighth.stdout)['round'],8)
         self.assertIn('7 review rounds consumed',eighth.stderr)
@@ -1320,6 +1409,15 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.write_verdict(goal='No',floor2='Fail');self.start();self.published()
         self.assertEqual(self.call('status')['next'],'human-escalation')
         self.assertIn('Floor',self.call('rule','--decision','continue','--reason','Fix scope',ok=False))
+        self.assertIn('Floor', self.call('start', '--reason', 'Fix scope', ok=False))
+
+    def test_start_reason_cannot_reopen_accepted_notes_after_another_ruling(self):
+        self.start('--wait'); self.published()
+        self.call('rule', '--decision', 'rewrite', '--reason', 'Reconsider the issue.')
+        before = self.prcomments.read_text()
+        self.assertIn('Notes', self.call('start', '--reason', 'Polish a Note.', '--architecture-level', 'no',
+                                        '--output', str(self.out), '--implementation', 'claude', ok=False))
+        self.assertEqual(self.prcomments.read_text(), before)
 
     def accepted_behind_main(self, conflict=False):
         self.start(); self.published()
@@ -1375,7 +1473,7 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
     def test_notes_and_goal_no_require_different_orchestrator_actions(self):
         self.write_verdict(goal='No',notes='Optional style improvement.')
         self.start();self.published()
-        self.assertIn('ruling',self.call('start','--architecture-level','no','--output',str(self.out),ok=False))
+        self.assertIn('reason',self.call('start','--architecture-level','no','--output',str(self.out),ok=False))
         result=self.call('rule','--decision','merge-as-is','--reason','Goal is met within bounds; file the note.')
         self.assertEqual(result['decision'],'merge-as-is')
         self.assertEqual(self.call('status')['next'],'merge-as-is')

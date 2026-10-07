@@ -336,7 +336,8 @@ alone defines judging: Goal and both Floors decide readiness. Record failed atte
 # Claude reviewer, after invoking the returned Agent instruction
 <plugin>/scripts/review-packet publish 124 --issue 123 --attempt <comment-id> --verdict <verdict-file>
 <plugin>/scripts/review-packet fail 124 --issue 123 --attempt <comment-id> --reason '<why no reviewer launched>'
-<plugin>/scripts/review-packet rule 124 --issue 123 --decision continue --reason '<blocking goal gap or missing evidence>'
+# Ordinary fix round: its reason is recorded with the reservation
+<plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --reason '<blocking goal gap or missing evidence>'
 ```
 
 For Claude, `start` returns the Agent instruction; invoke it and publish the whole result with
@@ -357,8 +358,12 @@ refuses on the count. Rule when another round would be pointless — findings of
 round, which the reviewer reports as non-convergence — rather than when a number is reached.
 Floor 1 returns the lane for real evidence. Floor 2 stops the lane and goes to the human, never a fix
 round. A `merge-as-is` ruling may settle Goal No but cannot waive either Floor. Notes alone never
-justify another round. Use `review-packet rule` for `continue`, `merge-as-is`, `rewrite`, `abandon`,
-or `change-route`; directional or human-touchpoint rulings require durable human authorization.
+justify another round. An ordinary fix round carries `--reason` with `start`; its continuation
+ruling is recorded in the reservation's same write. Accepted-head recovery still uses
+`review-packet rule --decision continue` with evidence of a base advance or an observed guard
+refusal. Use `rule` for `merge-as-is`, `rewrite`, `abandon`, or `change-route`; directional or
+human-touchpoint rulings require durable human authorization. Legacy headings and irregular round
+numbering warn; the latest published whole verdict still decides.
 There is no spend field or per-dispatch approval.
 
 A reservation may be marked failed where no reviewer verdict can exist: its start stopped before
@@ -394,10 +399,12 @@ the orchestrator to integrate:
 ```
 
 Use the absolute installed path as the first command word, with no Python wrapper,
-directory-changing prefix, shell composition, or redirection. The guard requires an open PR into
+directory-changing prefix, shell composition, or redirection. The guard requires a PR into
 the current default branch, current-base ancestry, a latest whole Goal Yes / both Floor Pass
-verdict for that head, and the CI result below, and it refuses if the PR head or the base head
-moved while it verified; `--help` carries the record-association and API preconditions it applies.
+verdict for that head, and the CI result below; `--help` carries the record-association and API
+preconditions it applies. GitHub rejects a closed PR or a moved head/base at the merge itself.
+Legacy headings, irregular round numbering, active review reservations and a ruling other than
+`merge-as-is` are warnings; only `merge-as-is` may settle Goal No, and neither Floor is waivable.
 It reads no branch protection, because GitHub enforces that gate server-side at the merge itself —
 the Branch protection section below owns every one of those conditions. One orchestrator owns a PR.
 The review packet's architecture-level input travels in the PR description or review record

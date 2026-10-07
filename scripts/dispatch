@@ -550,9 +550,13 @@ points here for; that page keeps the decision and the command line).
   Flags. --project selects another target checkout. --adopt records an already matching --branch
   and --worktree without launching or creating one. --pr must name the lane's branch; without it
   a continuation takes the branch's single open PR, and reports a closed or ambiguous one in the
-  run record rather than refusing.
+  run record rather than refusing. An existing inactive lane warns and reuses its branch/worktree;
+  a cleaned lane refuses, and a live or unknown CLI execution still blocks reuse. A new lane's
+  base accepts a named ref or full commit pin, never implicit HEAD or a flag form.
 
-  Continuation admission. An accepted head continues only on a recorded orchestrator ruling,
+  Continuation admission. Ordinary goal/evidence fixes need no prior ruling; the next review's
+  start records its reason with its reservation. An accepted head continues only on a recorded
+  evidence-bearing recovery ruling,
   except where the PR's base is no longer the default branch's head: that rebase continuation is
   admitted on the acceptance itself, consumes no review round, and is recorded as
   continuation=rebase. `guard merge --old-base/--old-head` then proves the rebased head.
@@ -593,7 +597,7 @@ def main():
     parser.add_argument('--model', help="explicit model override; otherwise use the role's anchored row")
     parser.add_argument('--effort', help="explicit effort override; otherwise use the role's anchored setting")
     parser.add_argument('--project', type=Path, default=Path.cwd(), help='target checkout, distinct from plugin installation')
-    parser.add_argument('--base', help='required named ref for a new lane, normally origin/main; fetch first')
+    parser.add_argument('--base', help='required named ref or full commit pin for a new lane, normally origin/main; fetch first')
     parser.add_argument('--branch', help='default task/ISSUE-TITLE; existing branch requires --adopt')
     parser.add_argument('--worktree', type=Path, help='default PROJECT/.claude/worktrees/ISSUE-TITLE')
     parser.add_argument('--packet', type=Path, help='complete caller-assembled reviewer contract and packet')
@@ -639,6 +643,12 @@ def main():
     lanes = [r for r in history if r.get('kind') == 'lane']
     lane = lanes[-1] if lanes else None
     existing = args.cleanup or args.continuing or args.purpose == 'reviewer'
+    if lane:
+        require(not any(r.get('status') == 'cleaned' and r.get('lane_id') == lane['lane_id'] for r in history),
+                'lane already cleaned')
+        if not existing:
+            print('dispatch warning: lane exists; reusing its recorded branch and worktree', file=sys.stderr)
+            existing = True
     require(args.cleanup or args.adopt or args.purpose, '--purpose is required')
     require(not args.adopt or not any((args.cleanup, args.continuing, args.purpose, args.implementation,
                                       args.packet, args.brief, args.resume)),
@@ -663,11 +673,12 @@ def main():
                 continue
             require(not alive(previous), 'recorded executor still running; wait for completion')
     else:
-        require(not lane or any(r.get('status') == 'cleaned' and r.get('lane_id') == lane['lane_id'] for r in history),
-                'lane exists; use --continue')
         base = filled(args.base, 'base')
-        require(base != 'HEAD' and not base.startswith('-') and not re.fullmatch(r'[0-9a-fA-F]{40,64}', base), 'base must be a named ref')
-        require(git(project, 'rev-parse', '--symbolic-full-name', base).startswith('refs/'), 'base must be a named ref')
+        require(not re.match(r'^(?:HEAD|@)(?:$|[~^:@{])', base) and not base.startswith('-'),
+                'base must be a named ref or explicit commit pin')
+        require(re.fullmatch(r'(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})', base)
+                or git(project, 'rev-parse', '--symbolic-full-name', base).startswith('refs/'),
+                'base must be a named ref or explicit commit pin')
         base_sha = git(project, 'rev-parse', '--verify', base + '^{commit}')
         slug = re.sub('[^a-z0-9]+', '-', issue['title'].lower()).strip('-')[:48].rstrip('-')
         name = f'{args.issue}-{slug}'
@@ -725,8 +736,8 @@ def main():
         return
     implementation = args.implementation or 'codex'  # the anchored roles' default executor (#464)
     require(not args.resume or implementation in NATIVE_IMPLEMENTATIONS, '--resume is only for native workers; CLI executors start fresh')
-    if args.continuing:
-        require(args.brief, '--continue requires --brief')
+    if args.continuing or (existing and args.purpose == 'worker'):
+        require(not args.continuing or args.brief, '--continue requires --brief')
         # A delivered lane continues through its open PR; without one, the dispatcher says so on
         # the issue and continues on the lane branch. Refusing here stranded #362's lane twice
         # (#371/#372), and the lane branch — not the PR — is what a continuation actually needs.
@@ -803,7 +814,7 @@ def main():
     if implementation in ('codex', 'claude-cli'):
         require((ROOT / 'hooks/pre-tool-use').is_file(), 'repository role hook is missing')
     rebase_continuation = False
-    if args.purpose == 'worker' and args.continuing and pr:
+    if args.purpose == 'worker' and existing and pr:
         rows = api(f'repos/{repo}/issues/{pr["number"]}/comments?per_page=100', '--paginate')
         owner = api(f'repos/{repo}')['owner']['login']
         rows = [r for r in rows if r.get('user', {}).get('login') == owner]

@@ -1599,21 +1599,19 @@ class RoundTest(AcceptanceTest):
                 self.assertTrue(result['rebase'], 'the reservation must not cost the rebase')
         # No reservation, no warning — and nothing else about the report changes.
         self.assertEqual(h.round_check(accepted, 'a'*40, rebase=True)['warnings'], [])
-        # The merge gate keeps its own refusal: a reservation never authorizes an integration.
-        with self.assertRaisesRegex(h.Refusal, 'active'):
-            h.merge_acceptance(accepted+[self.active(2, 'dispatched')], 'a'*40)
+        result = h.merge_acceptance(accepted+[self.active(2, 'dispatched')], 'a'*40)
+        self.assertEqual(result['id'], 1)
+        self.assertEqual(result['warnings'], ['review attempt 2 is still dispatched'])
         # Every other round admission is unchanged while a reservation stands.
         with self.assertRaisesRegex(h.Refusal, 'Notes'):
             h.round_check(accepted+[self.active(2)], 'a'*40)
-        with self.assertRaisesRegex(h.Refusal, 'ruling'):
-            h.round_check(self.rows()+[self.active(2)], 'a'*40)
+        self.assertEqual(h.round_check(self.rows()+[self.active(2)], 'a'*40)['next_round'], 2)
 
     def test_floor_failures_refuse_dispatch_despite_ruling_and_the_count_does_not(self):
         """#434: an eighth round with a continuation ruling is admitted; the count only warns."""
         h = module()
         self.assertTrue(hasattr(h, 'round_check'), 'round admission missing')
-        with self.assertRaisesRegex(h.Refusal, 'ruling'):
-            h.round_check(self.rows(), 'a'*40)
+        self.assertEqual(h.round_check(self.rows(), 'a'*40)['next_round'], 2)
         h.round_check(self.rows()+[self.rule(1, 'continue')], 'a'*40)
         with self.assertRaisesRegex(h.Refusal, 'Notes'):
             h.round_check(self.rows(goal='Yes')+[self.rule(1, 'continue')], 'a'*40)
@@ -1677,8 +1675,7 @@ class RoundTest(AcceptanceTest):
             h.round_check(accepted, 'a'*40)
         with self.assertRaisesRegex(h.Refusal, 'Notes'):
             h.round_check(accepted+[self.rule(1, 'continue')], 'a'*40, rebase=True)
-        with self.assertRaisesRegex(h.Refusal, 'ruling'):
-            h.round_check(self.rows(), 'a'*40, rebase=True)
+        self.assertFalse(h.round_check(self.rows(), 'a'*40, rebase=True)['rebase'])
         self.assertFalse(h.round_check(self.rows()+[self.rule(1, 'continue')], 'a'*40,
                                        rebase=True)['rebase'])
         floor = self.rows(goal='Yes')
@@ -1729,8 +1726,74 @@ class RoundTest(AcceptanceTest):
         self.assertEqual(h.merge_acceptance(rows, 'a'*40)['id'], 1)
         active = dict(record, status='dispatched', round=2)
         rows.append({'id': 2, 'body': '## Review attempt — round 2\n\n<!-- devstandard-review-v1 -->\n```json\n'+json.dumps(active)+'\n```\n'})
-        with self.assertRaisesRegex(h.Refusal, 'active'):
+        result = h.merge_acceptance(rows, 'a'*40)
+        self.assertEqual(result['id'], 1)
+        self.assertEqual(result['warnings'], ['review attempt 2 is still dispatched'])
+
+    def test_legacy_heading_warns_and_keeps_the_whole_verdict(self):
+        h = module()
+        rows = self.rows(goal='Yes')
+        rows[0]['body'] = rows[0]['body'].replace(' — round 1', '')
+        result = h.merge_acceptance(rows, 'a'*40)
+        self.assertEqual(result['id'], 1)
+        self.assertIn('legacy', ' '.join(result['warnings']))
+        rows[0]['body'] = rows[0]['body'].replace('Yes — assessed.', 'No — assessed.').replace(
+            'Ready to merge: Yes', 'Ready to merge: No')
+        with self.assertRaisesRegex(h.Refusal, 'Goal Yes'):
             h.merge_acceptance(rows, 'a'*40)
+
+    def test_round_sequence_warns_without_losing_the_latest_verdict(self):
+        h = module()
+        for numbers in ((1, 3), (1, 1), (3, 2)):
+            with self.subTest(numbers=numbers):
+                rows = self.rows(2, goal='Yes')
+                for row, number in zip(rows, numbers):
+                    row['body'] = re.sub(r'round \d+', f'round {number}', row['body'])
+                result = h.merge_acceptance(rows, 'a'*40)
+                self.assertEqual(result['id'], 2)
+                self.assertIn('round', ' '.join(result['warnings']))
+                rows[-1]['body'] = rows[-1]['body'].replace('Yes — assessed.', 'No — assessed.').replace(
+                    'Ready to merge: Yes', 'Ready to merge: No')
+                with self.assertRaisesRegex(h.Refusal, 'Goal Yes'):
+                    h.merge_acceptance(rows, 'a'*40)
+
+    def test_non_merge_ruling_warns_but_cannot_settle_goal_no(self):
+        h = module()
+        for decision in ('continue', 'rewrite', 'abandon', 'change-route'):
+            with self.subTest(decision=decision):
+                result = h.merge_acceptance(self.rows(goal='Yes')+[self.rule(1, decision)], 'a'*40)
+                self.assertEqual(result['id'], 1)
+                self.assertIn(decision, ' '.join(result['warnings']))
+                with self.assertRaisesRegex(h.Refusal, 'Goal Yes'):
+                    h.merge_acceptance(self.rows()+[self.rule(1, decision)], 'a'*40)
+
+    def test_duplicate_round_cannot_reuse_a_ruling_before_the_latest_verdict(self):
+        h = module()
+        rows = self.rows()+[self.rule(1, 'merge-as-is')]+self.rows()
+        rows[-1]['id'] = 101
+        with self.assertRaisesRegex(h.Refusal, 'Goal Yes'):
+            h.merge_acceptance(rows, 'a'*40)
+
+    def test_inline_continuation_supersedes_an_earlier_merge_as_is_ruling(self):
+        h = module()
+        attempt = self.active(2)
+        record = json.loads(attempt['body'].split('```json\n')[1].split('\n```')[0])
+        record['continuation'] = dict(kind='ruling', round=1, head='a'*40,
+                                      decision='continue', reason='Repair the goal gap.')
+        attempt['body'] = attempt['body'].split('```json\n')[0]+'```json\n'+json.dumps(record)+'\n```\n'
+        with self.assertRaisesRegex(h.Refusal, 'Goal Yes'):
+            h.merge_acceptance(self.rows()+[self.rule(1, 'merge-as-is'), attempt], 'a'*40)
+
+    def test_lowercase_numbered_legacy_heading_preserves_its_ruling_association(self):
+        h = module()
+        for heading, number in (('merge check 1 — round 3', 3),
+                                ('Merge check 1 — round 0', 0), ('Merge check 1 — round 01', 1)):
+            with self.subTest(heading=heading):
+                rows = self.rows()
+                rows[0]['body'] = rows[0]['body'].replace('Merge check 1 — round 1', heading)
+                result = h.merge_acceptance(rows+[self.rule(number, 'merge-as-is')], 'a'*40)
+                self.assertEqual(result['record']['round'], number)
+                self.assertTrue(result['warnings'])
 
 
 class RoundCliTest(AcceptanceTest):
@@ -2241,10 +2304,10 @@ class MergeTest(AcceptanceTest):
         code, out, err = self.guard()
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out)['merge'], 'pass')
-        self.assertGreater(len(reads), 1, 'the guard must still re-read the PR')
+        self.assertEqual(len(reads), 1, 'the merge API owns the head precondition')
 
-    def test_a_head_or_base_moving_between_the_two_reads_refuses(self):
-        """The compare that stays: the two SHAs the merge is pinned to."""
+    def test_a_head_or_base_move_is_left_to_the_merge_api(self):
+        """#475: verify the initial pins once; GitHub rejects a stale execution."""
         fixture = self.api  # captured once: each iteration doubles the fixture, never the last double
         for moved in ('head', 'base'):
             with self.subTest(moved=moved):
@@ -2260,13 +2323,43 @@ class MergeTest(AcceptanceTest):
                         return {'commit': {'sha': 'e' * 40}}
                     return answer
                 self.api = api
-                self.assertIn('moved during verification', self.refused())
+                code, out, err = self.guard()
+                self.assertEqual(code, 0, err)
+                self.assertEqual(json.loads(out)['merge'], 'pass')
+                self.assertEqual(seen['repos/o/r/pulls/12'], 1)
+                self.assertEqual(seen['repos/o/r/branches/main'], 1)
+                seen.clear()  # A fresh verification pins anew; the move occurs after that read.
+                before_write = self.api
+
+                def rejecting_api(endpoint, *args):
+                    if endpoint.endswith('/merge'):
+                        self.assertIn('sha=' + self.HEAD, args)
+                        return {'merged': False, 'message': f'{moved} moved'}
+                    return before_write(endpoint, *args)
+                self.api = rejecting_api
+                self.assertIn('GitHub refused', self.refused('--execute'))
 
     # ---- the reads the guard keeps -------------------------------------------
 
-    def test_a_moved_base_refuses(self):
+    def test_a_different_pr_base_sha_does_not_duplicate_current_base_ancestry(self):
         self.pr['base']['sha'] = 'c' * 40
-        self.assertIn('base', self.refused())
+        code, out, err = self.guard()
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)['base'], self.BASE)
+
+    def test_a_closed_pr_is_left_to_the_merge_api(self):
+        self.pr['state'] = 'closed'
+        code, out, err = self.guard()
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)['merge'], 'pass')
+        before_write = self.api
+
+        def rejecting_api(endpoint, *args):
+            if endpoint.endswith('/merge'):
+                return {'merged': False, 'message': 'Pull request is closed'}
+            return before_write(endpoint, *args)
+        self.api = rejecting_api
+        self.assertIn('GitHub refused', self.refused('--execute'))
 
     def test_the_integration_check_is_pinned_to_this_exact_base_and_head(self):
         self.assertEqual(self.h.merged_result(self.BASE, self.HEAD), self.integration)

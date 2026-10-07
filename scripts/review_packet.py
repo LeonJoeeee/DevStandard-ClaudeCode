@@ -67,6 +67,19 @@ def normalize(text):
     return GOAL_ANSWER.sub(r'\1\2', GOAL_HEADING.sub('### Goal verdict\n', decisions(text)))
 
 
+def legacy_review(body, next_round):
+    """Keep a legacy verdict's recorded round identity; report heading defects as accounting."""
+    heading, _, verdict = body.partition('\n')
+    match = re.fullmatch(r'## [Mm]erge check 1 — round ([0-9]+)\r?', heading)
+    number = int(match[1]) if match else next_round
+    warning = None
+    if not match:
+        warning = f'legacy review heading has no readable round; inferred round {number}'
+    elif heading != f'## Merge check 1 — round {number}' or number < 1:
+        warning = f'legacy review heading is noncanonical for recorded round {number}; reconcile history'
+    return number, verdict.lstrip('\n'), warning
+
+
 def missing_grounds(text):
     """Every decision line that states a result without the grounds required after it.
 

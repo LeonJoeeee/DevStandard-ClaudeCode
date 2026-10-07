@@ -265,21 +265,25 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
     def test_wait_holds_both_cli_invocations_until_atomic_completion_and_keeps_nonzero_output(self):
         for implementation in ('codex', 'claude-cli'):
             with self.subTest(implementation=implementation):
-                self.env['FAKE_EXIT'] = '7'
-                process = self.spawn_wait(implementation)
-                record = self.await_run(process)
-                self.assertIsNone(process.poll())
-                self.assertFalse(Path(record['completion']).exists())
-                Path(self.env['FAKE_HOLD']).touch()
-                stdout, stderr = process.communicate(timeout=8)
-                self.assertEqual(process.returncode, 0, stderr)
-                returned = json.loads(stdout)
-                self.assertEqual(returned['executor_exit'], 7)
-                self.assertEqual(Path(record['completion']).read_text(), '7\n')
-                self.assertTrue(Path(record['output']).read_text())
-                self.assertFalse(Path(record['completion']).with_suffix('.tmp').exists())
-                self.call('--cleanup', '--discard')
-                Path(self.env['FAKE_HOLD']).unlink()
+                # A cleaned lane is terminal (#475); each executor gets its own issue fixture.
+                fixture = DispatchTest(); fixture.setUp()
+                try:
+                    fixture.env['FAKE_EXIT'] = '7'
+                    process = fixture.spawn_wait(implementation)
+                    record = fixture.await_run(process)
+                    self.assertIsNone(process.poll())
+                    self.assertFalse(Path(record['completion']).exists())
+                    Path(fixture.env['FAKE_HOLD']).touch()
+                    stdout, stderr = process.communicate(timeout=8)
+                    self.assertEqual(process.returncode, 0, stderr)
+                    returned = json.loads(stdout)
+                    self.assertEqual(returned['executor_exit'], 7)
+                    self.assertEqual(Path(record['completion']).read_text(), '7\n')
+                    self.assertTrue(Path(record['output']).read_text())
+                    self.assertFalse(Path(record['completion']).with_suffix('.tmp').exists())
+                    fixture.call('--cleanup', '--discard')
+                finally:
+                    fixture.doCleanups()
 
     def test_wait_rejects_native_and_maintenance_combinations_before_mutation(self):
         for options in [('--purpose','worker','--base','origin/main'),
@@ -630,19 +634,37 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
             if unrelated.poll() is None: unrelated.terminate()
             unrelated.wait()
 
-    def test_worker_continuation_without_a_ruling_refuses_before_launch(self):
-        """#434: seven returned rounds no longer refuse; the missing ruling still does."""
+    def test_accepted_worker_continuation_without_recovery_refuses_before_launch(self):
+        """#475: only accepted-head recovery keeps the prior evidence precondition."""
         run = self.start(); self.finish(run)
         head = self.git('rev-parse', run['branch'])
         (self.root/'pr.json').write_text(json.dumps(dict(number=13, url='https://github.com/o/r/pull/13',
             state='OPEN', baseRefName='main', headRefName=run['branch'], headRefOid=head)))
-        rows = [{'id':i, 'user':{'login':'o'}, 'body':f'## Merge check 1 — round {i}\nReviewer: Probe — reviewed {head}\n'} for i in range(1,8)]
+        verdicts = __import__('runpy').run_path(str(SOURCE / '.github/test-review-packet.py'))
+        body = verdicts['canonical_verdict'](head=head)
+        rows = [{'id':i, 'user':{'login':'o'}, 'body':f'## Merge check 1 — round {i}\n\n'+body} for i in range(1,8)]
         self.env['REVIEW_COMMENTS'] = json.dumps(rows)
         brief = self.root/'continue.txt'; brief.write_text('Repair the goal gap.')
         before = self.comments.read_text()
-        self.assertIn('continuation ruling required',
+        self.assertIn('Notes do not authorize',
                       self.call('--purpose','worker','--continue','--pr','13','--brief',str(brief),ok=False))
         self.assertEqual(self.comments.read_text(), before)
+
+    def test_goal_no_worker_continuation_needs_no_separate_ruling(self):
+        run = self.start(); self.finish(run)
+        head = self.git('rev-parse', run['branch'])
+        (self.root/'pr.json').write_text(json.dumps(dict(number=13, url='https://github.com/o/r/pull/13',
+            state='OPEN', baseRefName='main', headRefName=run['branch'], headRefOid=head)))
+        verdicts = __import__('runpy').run_path(str(SOURCE / '.github/test-review-packet.py'))
+        body = verdicts['canonical_verdict'](head=head).replace('Yes — the PR', 'No — the PR').replace(
+            'Ready to merge: Yes', 'Ready to merge: No')
+        self.env['REVIEW_COMMENTS'] = json.dumps([dict(id=1, user={'login':'o'},
+            body='## Merge check 1 — round 1\n\n'+body)])
+        brief = self.root/'continue.txt'; brief.write_text('Repair the stated goal gap.')
+        continued = self.call('--purpose','worker','--continue','--pr','13','--brief',str(brief),
+                              '--implementation','codex','--wait')
+        self.assertEqual(continued['lane_id'], run['lane_id'])
+        self.assertEqual(continued['executor_exit'], 0)
 
     def test_accepted_recovery_continuation_keeps_the_delivered_lane(self):
         import runpy
@@ -979,13 +1001,45 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertEqual(self.lane_records(), [])
 
     def test_invalid_inputs_leave_no_worktree_or_comments(self):
-        for options in [('--base','HEAD'),('--base','missing/ref'),('--base',self.git('rev-parse','HEAD')),
+        self.git('config', 'branch.main.remote', '.')
+        self.git('config', 'branch.main.merge', 'refs/heads/main')
+        for options in [('--base','HEAD'),('--base','HEAD~0'),('--base','@'),
+                        ('--base','HEAD@{upstream}'),('--base','@{upstream}'),
+                        ('--base=-malformed',),('--base','missing/ref'),
                         ('--base','origin/main','--branch','bad branch'),
                         ('--base','origin/main','--packet',str(self.root/'absent'))]:
             # Worker packets are not accepted: they must not be silently ignored.
             self.call('--purpose','worker',*options,ok=False)
             self.assertFalse((self.project/'.claude').exists())
             self.assertEqual(json.loads(self.comments.read_text()),[])
+
+    def test_explicit_base_pin_is_recorded_and_used(self):
+        pin = self.git('rev-parse', 'origin/main')
+        record = self.start('--base', pin, '--wait')
+        self.assertEqual((record['base'], record['base_sha']), (pin, pin))
+        self.assertEqual(self.git('-C', record['worktree'], 'rev-parse', 'HEAD'), pin)
+
+    def test_existing_inactive_lane_warns_and_reuses_the_lane(self):
+        first = self.start('--wait')
+        result = subprocess.run([sys.executable, str(self.script), '12', '--project', str(self.project),
+            '--purpose', 'worker', '--implementation', 'codex', '--wait'],
+            env=self.env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        second = json.loads(result.stdout)
+        self.assertIn('warning', result.stderr)
+        self.assertIn('lane exists', result.stderr)
+        self.assertEqual(second['lane_id'], first['lane_id'])
+        self.assertEqual(second['worktree'], first['worktree'])
+        self.assertEqual(len([r for r in self.lane_records() if r['kind']=='lane']), 1)
+        self.assertEqual(self.git('worktree','list','--porcelain').count('worktree '), 2)
+
+    def test_implicit_lane_reuse_keeps_live_and_cleaned_refusals(self):
+        self.env['FAKE_HOLD'] = str(self.root/'release')
+        record = self.start()
+        self.assertIn('running', self.call('--purpose','worker',ok=False))
+        self.finish(record)
+        self.call('--cleanup', '--discard')
+        self.assertIn('cleaned', self.call('--purpose','worker','--base','origin/main',ok=False))
 
     def test_an_unparsed_issue_body_and_comment_still_reach_the_worker_verbatim(self):
         """#427: nothing has read the dispatcher's issue-contract parse since #402, and its own
@@ -1198,7 +1252,8 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         continued=self.call('--purpose','worker','--continue','--implementation','codex','--brief',str(brief));self.finish(continued)
         self.assertEqual(continued['lane_id'],lane['lane_id'])
         self.assertEqual(continued['worktree'],str(wt))
-        self.assertIn('lane exists',self.call('--adopt','--branch',branch,'--worktree',str(wt),'--base','origin/main',ok=False))
+        adopted = self.call('--adopt','--branch',branch,'--worktree',str(wt),'--base','origin/main')
+        self.assertEqual(adopted['lane_id'], lane['lane_id'])
 
     def test_adoption_records_pr_and_continuation_keeps_it(self):
         branch,wt=self.hand_made_lane()

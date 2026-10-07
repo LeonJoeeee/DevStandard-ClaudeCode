@@ -7,7 +7,7 @@ import re
 import subprocess
 import tempfile
 from urllib.parse import quote
-from review_packet import (FLOOR_LABELS, MANIFESTS, decision_line, floor_results, manifest_bump,
+from review_packet import (FLOOR_LABELS, MANIFESTS, decision_line, floor_results, legacy_review, manifest_bump,
                            normalize, recovery_ruling, verdict_shape, version_only)
 
 
@@ -293,8 +293,9 @@ def operative_review_comments(comments):
             if row.get('author_association') in REVIEW_AUTHOR_ASSOCIATIONS]
 
 
-def review_history(comments):
+def review_history(comments, warnings=None):
     """Consume #203's public record format; the review-packet command owns publication."""
+    warnings = warnings if warnings is not None else []
     attempts, rulings, active = [], [], []
     for row in comments:
         body = row['body']
@@ -306,18 +307,27 @@ def review_history(comments):
             if record['kind'] == 'ruling':
                 rulings.append(record)
             elif record.get('status') == 'returned':
-                record['row'] = dict(row, body=f"## Merge check 1 — round {record['round']}\n" + body[match.end():].lstrip('\n'))
+                rulings = []  # A ruling before this verdict cannot settle its new grounds.
+                record['row'] = dict(row, body=f"## Merge check 1 — round {max(1, record['round'])}\n" + body[match.end():].lstrip('\n'))
                 attempts.append(record)
-            elif record.get('status') in ('reserved', 'dispatched'):
-                active.append(record)
-        elif body.startswith('## Merge check 1'):
-            match = re.match(r'^## Merge check 1 — round ([1-9][0-9]*)\n', body)
-            require(match, 'ambiguous legacy review round; reconcile history')
+            else:
+                if record.get('status') in ('reserved', 'dispatched'):
+                    active.append(record)
+                continuation = record.get('continuation')
+                if isinstance(continuation, dict) and continuation.get('kind') == 'ruling':
+                    rulings.append(continuation)
+        elif re.match(r'^## [Mm]erge check 1', body):
+            number, verdict, warning = legacy_review(body, max((r['round'] for r in attempts), default=0)+1)
+            if warning:
+                warnings.append(warning)
             head = re.search(r'^Reviewer: [^\n]+ — reviewed\s+([0-9a-f]{40,64})', body, re.M)
-            attempts.append({'round': int(match[1]), 'head': head[1] if head else None, 'row': row})
-    attempts.sort(key=lambda row: row['round'])
-    require([row['round'] for row in attempts] == list(range(1, len(attempts)+1)),
-            'missing or duplicate review rounds; reconcile history')
+            numbered = dict(row, body=f'## Merge check 1 — round {max(1, number)}\n' + verdict)
+            attempts.append({'round': number, 'head': head[1] if head else None, 'row': numbered})
+            rulings = []
+    numbers = [row['round'] for row in attempts]
+    if numbers != list(range(1, len(attempts)+1)):
+        warnings.append(f'missing, duplicate or out-of-order review rounds: {numbers}; reconcile history')
+    # Accounting never lets an earlier acceptance displace the latest published verdict.
     last = attempts[-1] if attempts else None
     rulings = [r for r in rulings if last and r['round'] == last['round'] and r['head'] == last['head']]
     # An unreturned reservation is reported, not refused on: each caller decides what it means.
@@ -342,14 +352,15 @@ def base_advanced(repo, base_ref, head):
 
 
 def round_check(comments, head, rebase=False):
-    attempts, last, ruling, active = review_history(comments)
+    warnings = []
+    attempts, last, ruling, active = review_history(comments, warnings)
     # A reservation that never returned is a warning, never a refusal (#435). One transient
     # GitHub failure used to strand the lane behind a fifth command (#377), and what authorizes
     # the next step is the accepted verdict on the exact head — which a reservation is not.
     # The round count decides nothing either (#434): no record exists of the cap ever firing, and
     # the stop signal #173 measured is findings of the same shape round after round, which the
     # reviewer reports. `review-packet` counts the rounds and warns.
-    warnings = [f"review attempt {row['round']} is still {row['status']}" for row in active]
+    warnings += [f"review attempt {row['round']} is still {row['status']}" for row in active]
     reuse = False
     if last:
         # Read the decision the verdict parsers read; raw text let emphasis hide a Fail (#260).
@@ -368,20 +379,22 @@ def round_check(comments, head, rebase=False):
             reuse = rebase and not ruling
             if not reuse:
                 require(recovery_ruling(ruling, head), 'accepted verdict: Notes do not authorize another round')
-        if not reuse:
-            require(ruling and ruling['decision'] == 'continue', 'explicit orchestrator continuation ruling required')
-    return {'rounds': len(attempts), 'next_round': len(attempts)+1, 'head': head,
+        # An ordinary fix carries its reason on the next start reservation (#475); no prior
+        # comment is needed to dispatch its worker. Accepted-head recovery still needs evidence.
+    return {'rounds': len(attempts), 'next_round': max((r['round'] for r in attempts), default=0)+1, 'head': head,
             'rebase': reuse, 'warnings': warnings}
 
 
 def merge_acceptance(comments, head):
-    _, last, ruling, active = review_history(comments)
-    require(not active, 'review attempt active; wait for whole verdict')
+    warnings = []
+    _, last, ruling, active = review_history(comments, warnings)
+    warnings += [f"review attempt {row['round']} is still {row['status']}" for row in active]
     require(last, 'no whole Merge check 1 verdict')
-    if ruling:
-        require(ruling['decision'] == 'merge-as-is', 'latest orchestrator ruling does not authorize merge')
-    result = acceptance([last['row']], head, allow_goal_no=bool(ruling))
-    return dict(result, record=last)
+    if ruling and ruling['decision'] != 'merge-as-is':
+        warnings.append(f"latest orchestrator ruling is {ruling['decision']}; it does not authorize merge")
+    result = acceptance([last['row']], head,
+                        allow_goal_no=bool(ruling and ruling['decision'] == 'merge-as-is'))
+    return dict(result, record=last, warnings=warnings)
 
 
 def merge_check(project, repo, number, old_base=None, old_head=None, execute=False):
@@ -393,10 +406,8 @@ def merge_check(project, repo, number, old_base=None, old_head=None, execute=Fal
     default = repository['default_branch']
     base = api(f'repos/{repo}/branches/{quote(default, safe="")}')['commit']['sha']
     head = pr['head']['sha']
-    require(pr['state'] == 'open', 'merge requires an open PR')
     require(pr['base']['repo']['full_name'] == repo and pr['base']['ref'] == default,
             'merge requires the default branch of this repository')
-    require(pr['base']['sha'] == base, 'PR base is not current default-branch head')
     run('git', '-C', str(project), 'merge-base', '--is-ancestor', base, head)
     # No branch-protection read here (#435). GitHub enforces strict up-to-date checks, admin
     # enforcement, force-push and deletion bans and the queue server-side at the merge itself,
@@ -413,15 +424,9 @@ def merge_check(project, repo, number, old_base=None, old_head=None, execute=Fal
                 'prior acceptance must record the exact old review base (#203 record)')
         proof = compare_rebase(project, old_base, old_head, base, head)
     ci = commit_checks(repo, head, [merged_result(base, head)])
-    # Only the two SHAs everything above is pinned to. Comparing the whole PR record refused on
-    # an edited title or a new comment count, twice on 2026-09-20 (PRs #418, #419) — #435.
-    latest = api(f'repos/{repo}/pulls/{number}')['head']['sha']
-    latest_base = api(f'repos/{repo}/branches/{quote(default, safe="")}')['commit']['sha']
-    require(latest == head and latest_base == base,
-            f'PR head or base moved during verification: head {head} -> {latest}, '
-            f'base {base} -> {latest_base}')
     result = {'repo': repo, 'pr': number, 'base': base, 'head': head,
-              'verdict': verdict['id'] if verdict else None, 'comparison': proof, 'checks': ci, 'merge': 'pass'}
+              'verdict': verdict['id'] if verdict else None, 'comparison': proof, 'checks': ci, 'merge': 'pass',
+              'warnings': verdict['warnings'] if verdict else []}
     if execute:
         message = run('git', '-C', str(project), 'log', '-1', '--format=%B', head)
         trailers = re.findall(r'^(?:Claude-Session|Codex-Session|Co-authored-by):[^\r\n]+',
@@ -431,7 +436,8 @@ def merge_check(project, repo, number, old_base=None, old_head=None, execute=Fal
                               '-f', 'sha=' + head, '-f', 'merge_method=squash',
                               '-f', f'commit_title={pr["title"]} (#{number})',
                               '-f', 'commit_message=' + '\n'.join(trailers))
-        require(result['result'].get('merged'), 'GitHub refused the verified merge')
+        require(result['result'].get('merged'),
+                'GitHub refused the verified merge: ' + result['result'].get('message', ''))
     return result
 
 

@@ -5,7 +5,8 @@ current sources. It fills the fenced contract below, admits only a reported gree
 `scripts/dispatch`, and publishes the whole returned verdict with its round number. The commands and
 the recovery path are in `reference/orchestrator.md`'s **Review packets** section;
 `reference/orchestrator.md`'s Guarded operations section holds the round-accounting contract behind
-them — the counted rounds and the orchestrator's rulings. `assemble` produces the same packet
+them — the counted rounds and the orchestrator's rulings, including the ordinary fix reason
+recorded with `start --reason`. `assemble` produces the same packet
 without dispatching or publishing. The structured packet keeps contract slots separate from quoted
 evidence; the fence below governs how the reviewer judges both.
 
@@ -13,6 +14,8 @@ The assembler fills reviewer/head identity; the issue's goal, bounds, and done-c
 architecture-level flag; separate review and convention bases; the complete PR description; the
 accepted-spec blob SHA (`SHA` or `NONE`); the CI-configuration paths the diff touches (paths or
 `NONE`); and the entire delimited in-repo-write predicate, including its counted end marker.
+A missing PR description or a repository/branch mismatch with the recorded lane appears in
+`## Packet integrity` for Floor check 1 to judge.
 
 > Adapted from superpowers (`requesting-code-review/code-reviewer.md`, MIT, Jesse Vincent).
 

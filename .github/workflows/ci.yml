@@ -172,9 +172,13 @@ jobs:
           done
           # Claude Code is the only host (ADR 0063): no Codex host carrier survives, and the
           # Codex CLI executor keeps its page, which the orchestrator page routes to.
-          test ! -e .codex-plugin || { echo ".codex-plugin survives"; exit 1; }
-          test ! -e .agents || { echo "Codex repository marketplace survives"; exit 1; }
-          test ! -e skills/devstandard || { echo "Codex recovery skill survives"; exit 1; }
+          # Assert what git tracks, not what the filesystem holds: a Codex-dispatched worker's
+          # sandbox mounts a read-only empty tmpfs at <worktree>/.agents, so a path-existence
+          # test failed every local run inside a Codex lane while the path was never a
+          # repository artifact at all (#480). A *committed* retired carrier still fails.
+          test -z "$(git ls-files .codex-plugin)" || { echo ".codex-plugin survives"; exit 1; }
+          test -z "$(git ls-files .agents)" || { echo "Codex repository marketplace survives"; exit 1; }
+          test -z "$(git ls-files skills/devstandard)" || { echo "Codex recovery skill survives"; exit 1; }
           grep -q 'harness-codex.md' reference/orchestrator.md
           grep -q 'BEGIN CODEX WORKER MECHANICS' reference/harness-codex.md
           ! grep -q 'codex-native' reference/orchestrator.md reference/harness-codex.md reference/worker.md

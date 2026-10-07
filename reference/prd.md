@@ -32,9 +32,8 @@ Founding is the orchestrator's work, and it configures nothing: the guard has no
    the CI and Dependabot files from `reference/ci-pipelines.md`, the `/.claude/worktrees/` line in
    `.gitignore`, and the repo-root `CLAUDE.md` if the project has anything to put in it.
 3. **Apply branch protection last**: `guard protection --apply --check NAME` on main, naming the
-   status check the CI file in step 2 reports. That command is the step that ends direct pushes,
-   for every account including this one. The hook does not gate it — it stays the human's or the
-   main session's by role instruction and by who holds admin credentials. From here everything
+   status check the CI file in step 2 reports. Use `scripts/guard protection --help` for the
+   command contract; provisioning is the human's or the main session's work. From here everything
    lands through a PR, both checks and `scripts/guard merge`.
 
 The architecture doc settled with the human IS the skeleton's design, and that settling is its

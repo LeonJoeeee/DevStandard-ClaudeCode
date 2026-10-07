@@ -22,32 +22,18 @@ and its sandbox controls, so gating review uses plain read-only `exec`. Inspect 
 including newlines and attribution, before accepting it. These are Codex-specific observations, not
 claims about another tool.
 
-Codex CLI dispatch supplies role, task, model, effort and sandbox, and sets child-only
-`DEVSTANDARD_ROLE=worker|reviewer`; the fixed role hook it installs uses that role. **It also admits
-the host's MCP tools, for both purposes.** `codex exec` is non-interactive, so its approval policy is
-`never`, and `never` auto-rejects every MCP tool call — a child that sees the tools, is refused on
-the call, and cannot tell that from an unreachable server. On 0.153.4 the per-server
-`mcp_servers.<name>.default_tools_approval_mode = "approve"` is the only admission that keeps an
-explicit sandbox mode: `exec` ignores every `approval_policy` value, `--approve-for-me` cannot be
-combined with `-s`, and the bypass flag would cost the OS sandbox the gating reviewer is built on.
-Dispatch asks `codex mcp list --json` which servers the host has and passes that key per enabled
-server, so it reads and edits no configuration file; a server it cannot admit is named in the run
-record rather than left silently refused. Each purpose keeps the sandbox mode it had. Every role
-then reaches every attached server — the residual `reference/orchestrator.md`'s Guarded operations
-section accepts, whose remedy is not attaching such a server to a session that runs workers. What an
-executor must do when a visible tool is refused anyway is `reference/worker.md`'s harness-limit rule.
+For MCP access in a dispatched Codex executor, see `scripts/dispatch`'s `mcp_tool_admission`.
+Do not attach a server a worker must not reach to a session that runs workers. When a visible tool
+is refused, use `reference/worker.md`'s harness-limit rule.
 
 The hook-trust bypass dispatch passes is invocation-wide, so every hook source Codex has enabled
 runs in the child. A DevStandard Codex plugin left installed from a release before 2.0.0 is one such
 source: remove it with `codex plugin remove`.
 
-The run's advisory lock identifies an active supervisor across PID namespaces; PIDs are diagnostic.
-Only the atomic completion marker reports an observed CLI exit. Missing completion with an absent
-supervisor is lost or unknown and blocks reuse, which no attestation clears. Preserve lifecycle
-scratch until lane cleanup; `reference/orchestrator.md`'s Dispatching to an executor section owns
-explicit lost-run reconciliation and publication recovery. `--wait` changes lifetime only: it adds
-no runtime-directory access, authentication, hook trust or nested sandbox capability. Python
-supervision supports macOS/Linux without external `setsid` or `nohup`; Windows is not qualified.
+For a Codex CLI run's liveness, lost-run recovery and `--wait` semantics, use
+`scripts/dispatch --help` and `reference/orchestrator.md`'s Dispatching to an executor section.
+Preserve lifecycle scratch until lane cleanup and read the returned output itself.
+Python supervision supports macOS/Linux; Windows is not qualified.
 
 <!-- BEGIN CODEX WORKER MECHANICS -->
 ## Worker mechanics

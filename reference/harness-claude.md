@@ -27,12 +27,9 @@ means the nonce no longer picks out a single lane, and the packet is not recover
 
 ## The Claude CLI worker
 
-`scripts/dispatch --implementation claude-cli` runs that same definition as a top-level process
-started in the assigned worktree, under host and tool permissions with noninteractive
-`acceptEdits`, and adds no OS sandbox of its own.
-
-A dispatched CLI worker runs with session persistence off, so the host records nothing about its
-conversation and the lane lookup below is its carrier instead. An executor with neither carrier has
+When dispatched as a Claude CLI worker, see `scripts/dispatch`'s
+`--implementation claude-cli` call site for invocation settings. Recover the binding through the
+lane lookup below; an executor with neither a conversation record nor the lane's full brief has
 no lane-specific source left.
 
 A CLI process begins in its lane. When that directory is a linked worktree on a matching

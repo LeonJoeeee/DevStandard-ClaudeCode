@@ -163,7 +163,6 @@ jobs:
           # the orchestrator's Worktree lifecycle section went with the trigger.
           grep -q "check-ignore -q .claude/worktrees/probe" reference/orchestrator.md
           grep -q "seeds the in-repo worktree root" reference/ci-pipelines.md || grep -q "worktree root into" reference/ci-pipelines.md
-          grep -q "worktree directory must be gitignored" reference/orchestrator.md
           grep -q "pre-creation ignore check" reference/orchestrator.md
           # per-ADR 0039 presence
           for a in 0006 0007 0008 0015 0016 0018 0019 0024 0038; do

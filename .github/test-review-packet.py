@@ -990,11 +990,11 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
                 self.assertTrue(status['warnings'])
                 self.assertIn('warning', result.stderr)
 
-    def test_wait_keeps_origin_alive_through_whole_verdict_publication(self):
+    def test_default_codex_wait_keeps_origin_alive_through_whole_verdict_publication(self):
         self.env['FAKE_HOLD'] = str(self.root/'executor-release')
         process = subprocess.Popen([sys.executable,str(self.script),'start','13','--issue','12',
             '--project',str(self.project),'--architecture-level','no','--output',str(self.out),
-            '--implementation','codex','--wait'], env=self.env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            '--wait'], env=self.env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         self.addCleanup(lambda: process.poll() is None and process.kill())
         record = self.d.await_run(process)
         self.assertIsNone(process.poll())
@@ -1003,6 +1003,8 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         stdout, stderr = process.communicate(timeout=12)
         self.assertEqual(process.returncode,0,stderr)
         started = json.loads(stdout)
+        self.assertEqual(started['run']['implementation'], 'codex')
+        self.assertEqual(Path(started['run']['completion']).read_text(), '0\n')
         rows = json.loads(self.prcomments.read_text())
         self.assertEqual(len(rows),1)
         self.assertTrue(rows[0]['body'].endswith(self.verdict.read_text()))
@@ -1014,9 +1016,14 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.assertEqual(self.prcomments.read_text(),before)
 
     def test_wait_rejects_non_start_or_native_review_before_mutation(self):
-        for action, options in [('assemble',()), ('start',()), ('status',()), ('publish',())]:
+        for action, options in [('assemble',()), ('start',('--implementation','claude')),
+                                ('status',()), ('publish',())]:
             before = self.prcomments.read_text()
-            self.assertIn('--wait',self.call(action,*options,'--wait',ok=False))
+            result = self.invoke(action, *options, '--wait')
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn('--wait', result.stderr)
+            if action == 'start':
+                self.assertIn('resolved implementation: claude', result.stderr)
             self.assertEqual(self.prcomments.read_text(),before)
             self.assertFalse(self.out.exists())
 

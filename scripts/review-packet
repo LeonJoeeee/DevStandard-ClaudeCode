@@ -618,12 +618,13 @@ def main():
     parser.add_argument('--human-touchpoint', action='store_true')
     parser.add_argument('--human-authorization')
     args = parser.parse_args()
+    args.implementation = args.implementation or 'codex'
     require(not (args.model is not None or args.effort is not None) or args.action in ('start', 'assemble'),
             '--model and --effort require start or assemble')
     require(args.ci_fallback is None or args.action in ('start', 'assemble'),
             '--ci-fallback requires start or assemble')
     require(not args.wait or (args.action == 'start' and args.implementation == 'codex'),
-            '--wait requires start --implementation codex')
+            f'--wait requires start with Codex; resolved implementation: {args.implementation}')
     if args.action == '_watch':
         signal.signal(signal.SIGHUP, signal.SIG_IGN)  # Keep detached verdict publication alive.
     require(args.guard_refusal is None or (args.action == 'rule' and args.decision == 'continue'

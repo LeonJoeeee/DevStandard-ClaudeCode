@@ -127,7 +127,10 @@ launch fetches the record again.
 
 Before task work read root `CLAUDE.md`, `docs/architecture.md`, and relevant decisions; use a
 current appropriate base. An issue has nonempty `## Goal`, `## Bounds` (authorized scope and
-required finish), and `## Done-check`, with no unresolved template slots. Use executable checks
+required finish), and `## Done-check`, with no unresolved template slots. Write `Bounds` as the
+cases you know, then a closing default for what the change reaches: even a careful writer cannot
+enumerate an open reach discovered by reading, so a list alone is the wrong instrument; name every
+site that default reaches in the PR as reconciled or cleared, with the reason. Use executable checks
 where they establish the outcome. Prefer removal or guidance when it solves the problem. A
 one-or-two-line direct edit need not have a separate issue; ordinary changes still use a branch and
 PR.

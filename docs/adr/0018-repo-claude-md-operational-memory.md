@@ -1,6 +1,6 @@
 # 0018 — A repo-root CLAUDE.md joins the doc set: operational memory for clean-context workers
 
-Status: Accepted (2026-07-16). Amended by 0045 (2026-09-05). Amended (2026-07-25). Amended by 0030. Amended (2026-08-13). Amended (2026-08-25). Amended by 0037 (2026-08-25). Amended by 0038 (2026-08-26). Amended by 0039 (2026-08-26). Amended by 0041 (2026-08-28). Amended by 0042 (2026-08-31). Amended (2026-09-07). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
+Status: Accepted (2026-07-16). Amended by 0045 (2026-09-05). Amended (2026-07-25). Amended by 0030. Amended (2026-08-13). Amended (2026-08-25). Amended by 0037 (2026-08-25). Amended by 0038 (2026-08-26). Amended by 0039 (2026-08-26). Amended by 0041 (2026-08-28). Amended by 0042 (2026-08-31). Amended (2026-09-07). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended (2026-10-08).
 
 ## Context
 
@@ -118,3 +118,15 @@ creation and write-back lane remain; `reference/repo-claude-md.md` owns this mem
 operational-memory file: the Claude Code orchestrator and every dispatched worker read it, a Codex
 worker explicitly, alongside a project's existing `AGENTS.md`. No managed block is installed in
 either file; `reference/repo-claude-md.md` owns the rule.
+
+**Amendment (2026-10-08, issue #503):** the content fence recorded above becomes advice. This
+qualifies Decision bullet 1 and every later assertion that the shipped fence is unchanged,
+including the 2026-08-06 statement re-routed by the 2026-08-13 block. The file belongs to the
+repository owner; DevStandard never gates a change on its content or length.
+`reference/repo-claude-md.md` recommends the four operational kinds and gives an adaptable example,
+because the file is read at every session start and architecture, decisions, and tasks already
+have homes. The 30-line cap stays as discipline for the method writer's own operational notes,
+with trimming at write time; it does not constrain the owner's file or authorise removing their
+chosen content. Conditional generation, operational write-back through a PR, the harness readers,
+and the rules about `AGENTS.md` stand. The 2026-08-28 block's write-back duty remains, while its
+content-fence admission claim is retired by 0041's matching amendment.

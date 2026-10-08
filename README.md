@@ -144,7 +144,7 @@ GitHub holds the durable collaboration record; the [architecture](docs/architect
 the supported executor boundaries.
 
 **Can I adopt it on an existing project?**
-Yes. Changes are tasks from day one. Add each method document only when its own trigger fires; the paths in the templates are defaults that yield to an established convention, declared by the architecture doc, and a repo-root `CLAUDE.md` exists only when it has an admitted line to hold (`reference/in-repo-writes.md`).
+Yes. Changes are tasks from day one. Add each method document only when its own trigger fires; the paths in the templates are defaults that yield to an established convention, declared by the architecture doc. DevStandard creates a repo-root `CLAUDE.md` when operational memory needs an update (`reference/in-repo-writes.md`); its content guidance is advisory (`reference/repo-claude-md.md`).
 
 ## Layout
 

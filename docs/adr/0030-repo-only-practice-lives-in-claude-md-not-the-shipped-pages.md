@@ -1,6 +1,6 @@
 # 0030 — A practice useful only for maintaining this plugin lives in its repo `CLAUDE.md`, not in the shipped pages
 
-Status: Accepted (2026-08-06). Amended (2026-08-13). Amends 0027 (its rule is withdrawn from the shipped method and
+Status: Accepted (2026-08-06). Amended (2026-08-13). Amended (2026-10-08). Amends 0027 (its rule is withdrawn from the shipped method and
 kept as repo practice), 0022 (the second doc-duty pass it added), 0018 (this repo carries a
 root `CLAUDE.md` again, and its content fence widens here only), and 0029 (a pointer of its own
 that this withdrawal stales).
@@ -116,3 +116,10 @@ which is history — **but 0018's own amendment, written the same day by the sam
 the twin of this sentence.** Reconciling one of a pair and clearing the other is how a log starts
 disagreeing with itself, so it is reconciled here too and the split is stated rather than left
 silent.
+
+**Amendment (2026-10-08, issue #503):** the 2026-08-13 block's paired routing statement is
+reconciled alongside 0018: `reference/repo-claude-md.md` now carries content recommendations and
+an example, not an admissibility fence. The Decision's argument for widening the then-existing
+fence is decision-time reasoning and stays as history; a repository owner no longer needs that
+content exception. The distinction this ADR decided — repo-only practice here, shipped method
+on the target-facing pages — stands.

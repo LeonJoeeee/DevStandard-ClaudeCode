@@ -582,7 +582,10 @@ points here for; that page keeps the decision and the command line).
   base accepts a named ref or full commit pin, never implicit HEAD or a flag form.
 
   Continuation admission. Ordinary goal/evidence fixes need no prior ruling; the next review's
-  start records its reason with its reservation. An accepted head continues only on a recorded
+  start records its reason with its reservation. A Floor-2 failure requires an explicit
+  orchestrator ruling explaining why the correction restores the task boundary; its corrected
+  head needs full review. Human disposition leaves the failed PR unmerged and uses a fresh lane.
+  An accepted head continues only on a recorded
   evidence-bearing recovery ruling,
   except where the PR's base is no longer the default branch's head: that rebase continuation is
   admitted on the acceptance itself, consumes no review round, and is recorded as

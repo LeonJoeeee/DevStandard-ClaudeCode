@@ -1,6 +1,6 @@
 # 0011 — Two ordered merge gates: clean-context diff review, then green CI
 
-Status: Accepted (2026-07-02). Amended by 0045 (2026-09-05). Amended by 0025 (2026-08-02). Amended by 0035 (2026-08-22). Amended by 0040 (2026-08-26). Amended by 0044 (2026-09-02). Amended by 0046 (2026-09-05). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04). Amended (2026-10-07).
+Status: Accepted (2026-07-02). Amended by 0045 (2026-09-05). Amended by 0025 (2026-08-02). Amended by 0035 (2026-08-22). Amended by 0040 (2026-08-26). Amended by 0044 (2026-09-02). Amended by 0046 (2026-09-05). Amended (2026-09-07). Amended (2026-09-11). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04). Amended (2026-10-07). Amended (2026-10-08).
 
 ## Context
 
@@ -115,3 +115,10 @@ requirement, two checks and version-line exemptions are unchanged.
 
 `reference/code-review-prompt.md` carries the repository/remote rule; `reference/orchestrator.md`'s
 Dispatching to an executor section and `reference/harness-codex.md` carry the environment mechanics.
+
+**Amendment (2026-10-08, issue #507):** the 0035 block's artifact-only exception for findings
+of any severity excludes Floor-2 correction, and so does the 0046 block's preservation of the
+original exceptions. Correction after Floor 2 receives a new full review even on the same SHA;
+its failed verdict remains permanently on the PR. The bare-bump waiver in the 2026-09-07 block
+also excludes a PR with a recorded Floor-2 failure, even when correction leaves only synchronized
+version changes. `reference/orchestrator.md`'s Review packets section carries these boundaries.

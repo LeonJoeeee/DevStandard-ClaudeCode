@@ -345,6 +345,8 @@ alone defines judging: Goal and both Floors decide readiness. Record failed atte
 <plugin>/scripts/review-packet fail 124 --issue 123 --attempt <comment-id> --reason '<why no reviewer launched>'
 # Ordinary fix round: its reason is recorded with the reservation
 <plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --reason '<blocking goal gap or missing evidence>'
+# Floor-2 correction: an explicit ruling must precede continuation and full review
+<plugin>/scripts/review-packet rule 124 --issue 123 --decision continue --reason '<why this correction restores the existing task boundary>'
 ```
 
 For Claude, `start` returns the Agent instruction; invoke it and publish the whole result with
@@ -363,12 +365,23 @@ Returned verdicts consume rounds, including malformed and Floor-failing response
 returned no verdict does not. `review-packet` counts them and warns past the recorded cap; nothing
 refuses on the count. Rule when another round would be pointless — findings of the same shape round after
 round, which the reviewer reports as non-convergence — rather than when a number is reached.
-Floor 1 returns the lane for real evidence. Floor 2 stops the lane and goes to the human, never a fix
-round. A `merge-as-is` ruling may settle Goal No but cannot waive either Floor. Notes alone never
+Floor 1 returns the lane for real evidence. Floor 2 returns to the orchestrator with the reviewer's
+recommendation: the worker can correct it, or it needs a human decision. The recommendation is
+advice, not authority; you decide. A reversible scope deviation admits a same-lane fix only after
+`rule --decision continue --reason` records why the correction restores the existing task boundary;
+`start --reason` alone does not suffice. The Floor-2 verdict stays on the PR permanently, never
+deleted or superseded. The corrected head receives full review; neither the content-unchanged rebase
+path, the bare-bump waiver, nor the two narrow exceptions below apply, even if its SHA is unchanged.
+An unauthorized irreversible act, or a correction that changes the task's definition, still goes to the human.
+Record the human's disposition on that PR with a non-continue ruling and durable authorization;
+corrected work continues in a fresh lane, and the failed PR stays unmerged as the record.
+No later continuation ruling reopens a recorded human disposition in that lane.
+A `merge-as-is` ruling may settle Goal No but cannot waive either Floor. Notes alone never
 justify another round. An ordinary fix round carries `--reason` with `start`; its continuation
 ruling is recorded in the reservation's same write. Accepted-head recovery still uses
 `review-packet rule --decision continue` with evidence of a base advance or an observed guard
-refusal. Use `rule` for `merge-as-is`, `rewrite`, `abandon`, or `change-route`; directional or
+refusal. Use `rule` for `merge-as-is`, `rewrite`, `abandon`, or `change-route`; use `--human-touchpoint`
+and `--human-authorization` to record a human disposition. Directional or
 human-touchpoint rulings require durable human authorization. Legacy headings and irregular round
 numbering warn; the latest published whole verdict still decides.
 There is no spend field or per-dispatch approval.
@@ -466,8 +479,8 @@ Remove the worktree before its branch, then prune. The agent that integrates the
 workers leave lanes in place.
 
 The version bump rides the change PR, with the semver call in its description; disagreement is a
-Note. An unavoidable bare bump confined to all synchronized declared fields needs no issue or check
-1—CI lockstep is its review—but still uses the guard.
+Note. An unavoidable bare bump confined to all synchronized declared fields, with no Floor-2
+failure on that PR, needs no issue or check 1—CI lockstep is its review—but still uses the guard.
 
 Release only under the human's words or standing delegation, which only they grant or withdraw. A
 major release needs explicit direction. Keep release manifests in lockstep at the next version

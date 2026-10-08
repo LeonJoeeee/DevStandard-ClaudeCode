@@ -176,7 +176,7 @@ def state(history, head):
     after_verdict = history[history.index(last)+1:] if last else []
     rulings = [r for r in after_verdict if r['kind'] == 'ruling' and r['round'] == last['round']
                and r['head'] == last['head']]
-    ruling = rulings[-1] if rulings else None
+    ruling = packet_format.latest_ruling(rulings)
     next_step = 'review'
     accepted = False
     errors = []
@@ -187,7 +187,11 @@ def state(history, head):
     elif last:
         outcome = last['outcome']
         if outcome.get('floor2') == 'Fail':
-            next_step = 'human-escalation'
+            next_step = 'full-review' if packet_format.boundary_ruling(ruling, last['head']) else 'floor2-decision'
+            if ruling and ruling.get('human_disposition'):
+                next_step = ruling['human_disposition']
+            elif ruling and ruling['decision'] != 'continue':
+                next_step = ruling['decision']
         elif last['head'] != head:
             next_step = 'full-review'
         elif outcome.get('floor1') != 'Pass' or not outcome.get('valid'):
@@ -197,7 +201,7 @@ def state(history, head):
         else:
             next_step = 'goal-fix-decision'
         accepted = next_step == 'accepted'
-        if ruling and ruling['decision'] != 'continue' and next_step != 'human-escalation':
+        if ruling and ruling['decision'] != 'continue' and outcome.get('floor2') != 'Fail':
             next_step = ruling['decision'] if last['head'] == head else 'full-review'
     status = dict(rounds=len(returned), next_round=max(numbers, default=0)+1, cap=CAP,
                   next=next_step, accepted=accepted, last=last, ruling=ruling, active=active, warnings=warnings)
@@ -221,7 +225,11 @@ def warn(status):
 def admit_round(status, reason=None):
     require(not status['active'], 'review attempt is already active; publish or recover it before another dispatch')
     if status['last']:
-        require(status['last']['outcome'].get('floor2') != 'Fail', 'Floor check 2 failed; stop lane and escalate to human')
+        if status['last']['outcome'].get('floor2') == 'Fail':
+            require(packet_format.boundary_ruling(status['ruling'], status['last']['head']),
+                    'Floor check 2 failed; rule --decision continue --reason must explain why '
+                    'the correction restores the task boundary before a fix round')
+            return  # The explicit ruling is already permanent; start must not replace it.
         require(not status['accepted'] or packet_format.recovery_ruling(status['ruling'], status['last']['head']),
                 'accepted verdict: Notes do not authorize another round')
         if not status['accepted']:
@@ -480,9 +488,14 @@ def rule(args, project, repo, pr, status):
     require(args.reason and args.reason.strip(), '--reason is required for an orchestrator ruling')
     require(args.decision, '--decision is required')
     recovery = None
-    if args.decision in ('continue', 'merge-as-is'):
+    floor2_failed = last['outcome'].get('floor2') == 'Fail'
+    if args.decision == 'merge-as-is':
         require(last['outcome'].get('floor2') != 'Fail', 'Floor check 2 failed; no fix or merge ruling can waive it')
     if args.decision == 'continue':
+        if floor2_failed:
+            require(not args.human_touchpoint and not args.human_authorization
+                    and not (status['ruling'] and status['ruling'].get('human_disposition')),
+                    'Floor check 2 human disposition requires a fresh lane; record it with a non-continue ruling')
         if status['accepted']:
             head = pr['headRefOid']
             if args.guard_refusal is not None:
@@ -514,6 +527,8 @@ def rule(args, project, repo, pr, status):
             'directional or independent human touchpoint: record the human authorization first')
     record = dict(kind='ruling', round=last['round'], head=last['head'], decision=args.decision,
                   reason=args.reason, human_authorization=args.human_authorization)
+    if args.decision == 'continue' and floor2_failed:
+        record['boundary_restoration'] = args.reason
     if recovery:
         record['recovery'] = recovery
     write_comment(project, repo, args.pr, record)
@@ -580,6 +595,11 @@ reference/orchestrator.md points here for; that page keeps the decision and the 
   stop signal, and the reviewer's own contract reports them. Legacy headings and irregular round
   numbering warn too; the latest published whole verdict remains operative. Ordinary fix rounds
   use start --reason, recorded as a continuation ruling in the reservation's same write.
+  Floor-2 correction instead requires rule --decision continue --reason explaining why it restores
+  the task boundary. The recommendation is advice; the orchestrator decides. The failed verdict
+  remains permanent and correction requires full review, never acceptance or rebase reuse.
+  An unauthorized irreversible act or a changed task definition needs the human: record the
+  disposition on this PR, leave it unmerged, and continue corrected work in a fresh lane.
   Accepted-head recovery keeps its prior evidence-bearing ruling; Notes never authorize a round.
 
   Attempt disposition. A recorded run stays on publication or on exact-run reconciliation, and
@@ -654,7 +674,9 @@ def main():
             except (dispatch.Refusal, ValueError):
                 # An unreadable pin cannot prove a bare bump; assembly reports it to the reviewer.
                 bare_bump = False
-            require(not bare_bump,
+            floor2_history = any(r.get('status') == 'returned' and r['outcome'].get('floor2') == 'Fail'
+                                 for r in history)
+            require(not bare_bump or floor2_history,
                     'bare version bump: no review needed; CI lockstep is its review; use scripts/guard merge')
             require(args.issue is not None, '--issue is required for an ordinary review')
             issue = gh(project, 'issue', 'view', str(args.issue), '--repo', repo,

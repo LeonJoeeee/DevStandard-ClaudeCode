@@ -1,6 +1,6 @@
 # 0022 — Ceremony is universal: every change merges through PR + fresh review + CI
 
-Status: Accepted (2026-07-24). Amended by 0027. Amended by 0030. Amends 0015 (the small-change ceremony exemption only; 0015's issues-dispatch / PRs-return / ladder-picks-executor core stands). Amended by 0034 (2026-08-17). Amended (2026-09-07). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29).
+Status: Accepted (2026-07-24). Amended by 0027. Amended by 0030. Amends 0015 (the small-change ceremony exemption only; 0015's issues-dispatch / PRs-return / ladder-picks-executor core stands). Amended by 0034 (2026-08-17). Amended (2026-09-07). Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended (2026-10-08).
 
 ## Context
 
@@ -80,3 +80,8 @@ still require ordinary review. `reference/hard-edges.md` carries the operative p
 exemption covers the two Claude manifests' version lines, which must carry equal old and new
 versions with nothing else changed; mode changes and every other diff still require ordinary review.
 `reference/orchestrator.md`'s Merge and rebase proof section carries the operative predicate.
+
+**Amendment (2026-10-08, issue #507):** the bare-bump exemption in the 2026-09-07 and
+2026-09-29 blocks does not cover a PR with a recorded Floor-2 failure. Even when correction leaves
+only synchronized version changes, it must receive a new full review and the failed verdict remains
+permanent. `reference/orchestrator.md`'s Review packets section carries this boundary.

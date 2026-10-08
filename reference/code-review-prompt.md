@@ -5,7 +5,8 @@ To commission an ordinary review from current sources, use the installed plugin'
 recovery path are in `reference/orchestrator.md`'s **Review packets** section;
 `reference/orchestrator.md`'s Guarded operations section holds the round-accounting contract behind
 them — the counted rounds and the orchestrator's rulings, including the ordinary fix reason
-recorded with `start --reason`. `assemble` produces the same packet
+recorded with `start --reason` and the explicit boundary-restoration ruling for Floor-2 correction.
+`assemble` produces the same packet
 without dispatching or publishing. The structured packet keeps contract slots separate from quoted
 evidence; the fence below governs how the reviewer judges both.
 
@@ -150,6 +151,11 @@ reshaping, not another round.
 “done” does not pass; (b) there was no unauthorized irreversible action and no work outside the
 task's scope, including files or branches beyond the task—either one fails the PR. Packet integrity
 failures are Floor failures as directed above, not another category.
+On a Floor-2 failure, recommend whether the worker can correct it within the existing task or it
+needs a human decision, with grounds. This recommendation is advice, not authority: the orchestrator
+decides. An unauthorized irreversible act, or a correction changing the task's definition, needs
+the human; a reversible scope deviation may be corrected only on an explicit orchestrator ruling
+explaining why the correction restores the boundary.
 Check the architecture-level flag against the diff; record a false declaration as a Note.
 3. Notes. Record everything else observed, including style, peripheral edge cases, and possible
 improvements. Pre-existing defects and real defects on lines the author did not modify belong in
@@ -176,6 +182,7 @@ the diff.
 1. Evidence-backed completion claim: [Pass | Fail] — grounds.
 2. Authorization and scope: [Pass | Fail] — grounds covering both unauthorized irreversible actions
 and work outside the task's scope.
+If check 2 fails, add: Floor-2 recommendation: [worker can correct | needs human decision] — grounds.
 Ready to merge: [Yes | No] — decided only by the Goal verdict and these two Floor checks.
 ### Notes
 [Everything else observed, or “None.”] Notes never affect the verdict or trigger a re-review;

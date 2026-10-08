@@ -230,8 +230,8 @@ stays on the human's ask-axes and `reference/ci-pipelines.md`'s tag-triggered de
 
 **Version bumps:** fold the lockstep bump into the change PR and put the semver call in its
 description; a reviewer's disagreement is a Note, never a separate PR (human ruling, 2026-09-06,
-issue #226). If a bare bump PR is unavoidable, it needs no issue or check-1 reviewer: the CI
-lockstep gate is its review. It still merges through `scripts/guard merge`.
+issue #226). If a bare bump PR is unavoidable and has no Floor-2 failure, it needs no issue or
+check-1 reviewer: the CI lockstep gate is its review. It still merges through `scripts/guard merge`.
 The guard's bare-bump waiver and rebase exemption cover both synchronized manifest version
 fields, with equal old and new versions and no other line or mode changes; the rebase proof keeps
 its ordering checks (`reference/orchestrator.md`'s Merge and rebase proof section).

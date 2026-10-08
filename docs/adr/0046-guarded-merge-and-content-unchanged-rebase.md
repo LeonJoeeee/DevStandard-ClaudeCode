@@ -1,6 +1,6 @@
 # 0046 — Guard the reviewed head and prove a content-unchanged rebase
 
-Status: Accepted (2026-09-05). Amends 0011 and 0035 (rebase exception). Amended (2026-09-07). Amended by 0051 (2026-09-10). Amended by 0052 (2026-09-10). Amended by 0056 (2026-09-11). Amended (2026-09-13). Amended (2026-09-20). Amended by 0063 (2026-09-29).
+Status: Accepted (2026-09-05). Amends 0011 and 0035 (rebase exception). Amended (2026-09-07). Amended by 0051 (2026-09-10). Amended by 0052 (2026-09-10). Amended by 0056 (2026-09-11). Amended (2026-09-13). Amended (2026-09-20). Amended by 0063 (2026-09-29). Amended (2026-10-08).
 
 ## Context
 
@@ -224,3 +224,14 @@ carries the operative wording.
 **Amendment (2026-09-29, see 0063):** 0063 deletes `.codex-plugin/plugin.json`. The exemption covers
 the two Claude manifests' version lines; the mode and rebase-ordering checks remain.
 `reference/orchestrator.md`'s Merge and rebase proof section carries the operative predicate.
+
+**Amendment (2026-10-08, issue #507):** the Decision's *"a ruling cannot waive the Floor"* still
+forbids accepting a failing verdict. It no longer forbids correction after Floor 2: an explicit
+orchestrator `rule --decision continue --reason` must explain why the correction restores the
+existing task boundary. The record carries `boundary_restoration`; an ordinary `start --reason`
+cannot supply it. Both review admission and worker continuation require that ruling bound to the
+latest failed round and head. The failed verdict remains permanently on the PR, and the corrected
+head receives full review rather than content-unchanged-rebase reuse. An unauthorized irreversible
+act or task redefinition still needs the human; record the disposition on the failed PR, leave it
+unmerged, and continue corrected work in a fresh lane. `reference/orchestrator.md`'s Review packets
+section carries the operative wording.

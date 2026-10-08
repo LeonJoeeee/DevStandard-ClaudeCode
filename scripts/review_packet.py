@@ -134,6 +134,31 @@ def verdict_shape(text, head, identity=None):
     return None
 
 
+def latest_ruling(rulings):
+    """Keep a recorded human disposition when a later ruling omits its authorization.
+
+    Callers supply only rulings for the latest returned round and head. A later ordinary ruling
+    cannot turn that human disposition into permission to reuse the failed lane.
+    """
+    if not rulings:
+        return None
+    human = next((r['decision'] for r in reversed(rulings) if r.get('human_authorization')), None)
+    return dict(rulings[-1], human_disposition=human) if human else rulings[-1]
+
+
+def boundary_ruling(ruling, head):
+    """An explicit orchestrator ruling explaining restoration of the failed head's boundary.
+
+    Ordinary start reasons carry no such attestation. This admits correction and full review,
+    never acceptance of the failed verdict or continuation of a human disposition in this lane.
+    """
+    if not ruling or ruling.get('decision') != 'continue' or ruling.get('head') != head:
+        return False
+    reason = ruling.get('boundary_restoration')
+    return (isinstance(reason, str) and bool(reason.strip())
+            and not ruling.get('human_authorization') and not ruling.get('human_disposition'))
+
+
 def recovery_ruling(ruling, head):
     """A trusted continuation ruling must carry recovery evidence for this accepted head.
 

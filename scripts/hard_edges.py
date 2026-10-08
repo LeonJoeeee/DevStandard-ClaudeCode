@@ -7,7 +7,7 @@ import re
 import subprocess
 import tempfile
 from urllib.parse import quote
-from review_packet import (FLOOR_LABELS, MANIFESTS, decision_line, floor_results, legacy_review, manifest_bump,
+from review_packet import (FLOOR_LABELS, MANIFESTS, boundary_ruling, decision_line, floor_results, latest_ruling, legacy_review, manifest_bump,
                            normalize, recovery_ruling, verdict_shape, version_only)
 
 
@@ -331,7 +331,7 @@ def review_history(comments, warnings=None):
     last = attempts[-1] if attempts else None
     rulings = [r for r in rulings if last and r['round'] == last['round'] and r['head'] == last['head']]
     # An unreturned reservation is reported, not refused on: each caller decides what it means.
-    return attempts, last, rulings[-1] if rulings else None, active
+    return attempts, last, latest_ruling(rulings), active
 
 
 def base_advanced(repo, base_ref, head):
@@ -364,8 +364,10 @@ def round_check(comments, head, rebase=False):
     reuse = False
     if last:
         # Read the decision the verdict parsers read; raw text let emphasis hide a Fail (#260).
-        require('Fail' not in floor_results(last['row']['body'], '2. Authorization and scope'),
-                'Floor check 2 failed; stop lane and escalate to human')
+        if 'Fail' in floor_results(last['row']['body'], '2. Authorization and scope'):
+            require(boundary_ruling(ruling, last['head']),
+                    'Floor check 2 failed; an explicit orchestrator ruling must explain why '
+                    'the correction restores the task boundary before continuation')
         try:
             acceptance([last['row']], head)
         except Refusal:
@@ -416,6 +418,9 @@ def merge_check(project, repo, number, old_base=None, old_head=None, execute=Fal
     comments = api(f'repos/{repo}/issues/{number}/comments?per_page=100', '--paginate')
     review_comments = operative_review_comments(comments)
     bare_bump = refusing(version_only, project, base, head)
+    attempts, _, _, _ = review_history(review_comments)
+    if any('Fail' in floor_results(r['row']['body'], FLOOR_LABELS[1]) for r in attempts):
+        bare_bump = False  # Floor-2 correction always receives a new full review, even a bare bump.
     verdict = None if bare_bump else merge_acceptance(review_comments, old_head or head)
     proof = None
     if old_head and not bare_bump:

@@ -1,7 +1,7 @@
 # 0044 — Check 1 judges goal fulfillment; peripheral observations are notes
 
 Status: Accepted (2026-09-02). Amends 0011 (check 1's judging semantics) and 0035 (the
-quoted-fix exception's vocabulary and qualifying verdict). Amended (2026-09-07).
+quoted-fix exception's vocabulary and qualifying verdict). Amended (2026-09-07). Amended (2026-10-08).
 
 ## Context
 
@@ -38,3 +38,10 @@ unchanged: `reference/code-review-prompt.md` is still the single operative contr
 the worker source carries only the trigger and the verify-then-fix-or-refute pointer into it,
 including the rule that Notes alone decide nothing and never trigger a re-review. Nothing about the
 judging contract, the Floor, or 0011's and 0035's amended instructions changes here.
+
+**Amendment (2026-10-08, issue #507):** a Floor-2 failure keeps its refusal and grounds and adds
+one recommendation: the worker can correct it within the existing task, or it needs a human
+decision. That recommendation is advice, not authority; the orchestrator decides the disposition.
+`reference/code-review-prompt.md` carries the output shape and `reference/orchestrator.md`'s Review
+packets section carries continuation and human disposition. Goal and both Floors still decide merge
+readiness; a recommendation grants no acceptance.

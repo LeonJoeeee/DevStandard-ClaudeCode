@@ -254,7 +254,7 @@ class OutcomeTest(unittest.TestCase):
                         ('Yes', 'Pass', 'Pass', 'Yes', 'accepted'),
                         ('No', 'Pass', 'Pass', 'No', 'goal-fix-decision'),
                         ('Yes', 'Fail', 'Pass', 'No', 'evidence-fix-decision'),
-                        ('Yes', 'Pass', 'Fail', 'No', 'human-escalation')):
+                        ('Yes', 'Pass', 'Fail', 'No', 'floor2-decision')):
                     with self.subTest(emphasis=emphasis, wrap=wrap, goal=goal, floor1=floor1, floor2=floor2):
                         verdict = ROUND_ONE_VERDICT.replace('\nNo —', f'\n{emphasis}{goal}{emphasis} —')
                         for label, written, value in (
@@ -305,7 +305,7 @@ class OutcomeTest(unittest.TestCase):
                 self.assertEqual(self.review['state']([record | {'outcome': result}],
                                                       record['head'])['next'], 'evidence-fix-decision')
 
-    def test_a_groundless_floor_two_failure_still_stops_the_lane(self):
+    def test_a_groundless_floor_two_failure_still_requires_disposition(self):
         """Grounds decide validity, never which result is reported: a Fail must not hide (#260)."""
         record = self.canonical_record()
         groundless = canonical_verdict(bare='2. Authorization and scope: Pass')
@@ -315,7 +315,7 @@ class OutcomeTest(unittest.TestCase):
         self.assertEqual(result['floor2'], 'Fail')
         self.assertFalse(result['valid'])
         self.assertEqual(self.review['state']([record | {'outcome': result}],
-                                              record['head'])['next'], 'human-escalation')
+                                              record['head'])['next'], 'floor2-decision')
 
     def test_malformed_shapes_are_never_published_as_valid(self):
         for name, body in malformed_shapes().items():
@@ -344,13 +344,13 @@ class OutcomeTest(unittest.TestCase):
                 self.assertEqual(self.review['state']([record | {'outcome': result}],
                                                       record['head'])['next'], 'accepted')
 
-    def test_a_second_floor_two_failure_stops_publication_state(self):
+    def test_a_second_floor_two_failure_still_requires_disposition(self):
         body = malformed_shapes()['second 2. Authorization and scope']
         record = self.canonical_record()
         result = self.review['outcome'](body, record)
         self.assertEqual(result['floor2'], 'Fail')
         self.assertEqual(self.review['state']([record | {'outcome': result}], record['head'])['next'],
-                         'human-escalation')
+                         'floor2-decision')
 
     def test_goal_cannot_borrow_an_answer_from_a_later_section_or_prose(self):
         for section in ('### Goal verdict\n\n### Other\nNo',
@@ -653,6 +653,15 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.assertIn('scripts/guard merge', result.stderr)
         self.assertEqual(json.loads(self.prcomments.read_text()), [])
         self.assertFalse(self.out.exists())
+
+    def test_a_bare_bump_after_floor_two_still_requires_an_ordinary_review(self):
+        self.write_verdict(goal='No', floor2='Fail'); self.start('--wait'); self.published()
+        self.call('rule', '--decision', 'continue', '--reason',
+                  'Remove the scope deviation, leaving only the authorized synchronized bump.')
+        result = self.bare_bump_start()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('--issue is required', result.stderr)
+        self.assertNotIn('no review needed', result.stderr)
 
     def test_one_manifest_bump_with_a_stale_marketplace_requires_ordinary_review(self):
         result = self.bare_bump_start(stale_marketplace=True)
@@ -1374,11 +1383,96 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.assertEqual(ruling['decision'],'merge-as-is')
         self.assertIsNone(ruling['human_authorization'])
 
-    def test_floor_two_stops_lane_without_fix_round(self):
+    def test_floor_two_requires_an_explicit_boundary_restoration_ruling(self):
         self.write_verdict(goal='No',floor2='Fail');self.start();self.published()
-        self.assertEqual(self.call('status')['next'],'human-escalation')
-        self.assertIn('Floor',self.call('rule','--decision','continue','--reason','Fix scope',ok=False))
+        self.assertEqual(self.call('status')['next'],'floor2-decision')
         self.assertIn('Floor', self.call('start', '--reason', 'Fix scope', ok=False))
+        self.assertIn('reason', self.call('rule', '--decision', 'continue', '--reason', '   ', ok=False))
+        reason = 'Remove the unrequested file; the remaining diff stays within the original Bounds.'
+        ruling = self.call('rule', '--decision', 'continue', '--reason', reason)
+        self.assertEqual(ruling['boundary_restoration'], reason)
+        self.assertEqual(self.call('status')['next'], 'full-review')
+        self.assertFalse(self.call('status')['accepted'])
+        self.assertEqual(self.start('--wait')['round'], 2)
+
+    def test_floor_two_human_disposition_moves_state_but_requires_a_fresh_lane(self):
+        self.write_verdict(goal='No', floor2='Fail'); self.start('--wait'); self.published()
+        authorization = 'The human approved rewriting the task on 2026-10-08.'
+        self.assertIn('fresh lane', self.call('rule', '--decision', 'continue',
+            '--reason', 'The correction changes the task definition.', '--human-touchpoint',
+            '--human-authorization', authorization, ok=False))
+        self.assertIn('human', self.call('rule', '--decision', 'rewrite',
+            '--reason', 'The correction changes the task definition.', '--human-touchpoint', ok=False))
+        ruling = self.call('rule', '--decision', 'rewrite',
+            '--reason', 'The correction changes the task definition.', '--human-touchpoint',
+            '--human-authorization', authorization)
+        self.assertEqual(ruling['human_authorization'], authorization)
+        self.assertEqual(self.call('status')['next'], 'rewrite')
+        self.assertIn('Floor', self.call('start', '--reason', 'Try again here.', ok=False))
+        self.assertIn('Floor', self.call('rule', '--decision', 'merge-as-is', '--reason', 'Waive it.', ok=False))
+        self.assertIn('fresh lane', self.call('rule', '--decision', 'continue',
+            '--reason', 'Restore the old boundary.', ok=False))
+        self.call('rule', '--decision', 'rewrite', '--reason', 'Clarify the fresh-lane handoff.')
+        self.assertIn('fresh lane', self.call('rule', '--decision', 'continue',
+            '--reason', 'Restore the old boundary.', ok=False))
+        self.assertEqual(self.call('status')['next'], 'rewrite')
+
+    def commit_pr_head(self):
+        """Publish a fixture's real task commit and the PR head read by the boundary double."""
+        self.d.git('-C', str(self.wt), 'add', '-A')
+        self.d.git('-C', str(self.wt), 'commit', '-m', 'scope reproduction')
+        self.head = self.d.git('rev-parse', self.branch)
+        self.d.git('update-ref', 'refs/pull/13/head', self.head)
+        self.d.git('push', 'origin', self.branch, 'refs/pull/13/head')
+        pr = json.loads(self.prfile.read_text())
+        pr['headRefOid'] = self.head
+        self.prfile.write_text(json.dumps(pr))
+
+    def test_floor_two_corrected_head_is_fully_reviewed_and_failed_verdict_is_retained(self):
+        stray = self.wt / 'unrequested.txt'
+        stray.write_text('Outside the task Bounds.\n')
+        self.commit_pr_head()
+        failed_head = self.head
+        self.write_verdict(goal='No', floor2='Fail')
+        verdict = self.verdict.read_text().replace('Ready to merge:',
+            'Floor-2 recommendation: worker can correct — Remove unrequested.txt.\nReady to merge:')
+        self.verdict.write_text(verdict)
+        self.start('--wait'); self.published()
+        failed_comment = json.loads(self.prcomments.read_text())[0]
+        self.assertTrue(failed_comment['body'].endswith(verdict))
+
+        stray.unlink()
+        self.commit_pr_head()
+        self.assertNotEqual(failed_head, self.head)
+        self.assertEqual(self.call('status')['next'], 'floor2-decision')
+        self.assertIn('Floor', self.call('start', '--reason', 'Stray file removed.', ok=False))
+        self.call('rule', '--decision', 'continue', '--reason',
+                  'Removing unrequested.txt restores the original task boundary without redefining it.')
+        self.assertEqual(self.call('status')['next'], 'full-review')
+        sys.path.insert(0, str(SOURCE/'scripts'))
+        try:
+            guard = runpy.run_path(str(SOURCE/'scripts/hard_edges.py'))
+        finally:
+            sys.path.pop(0)
+        comments = json.loads(self.prcomments.read_text())
+        self.assertFalse(guard['round_check'](comments, self.head, rebase=True)['rebase'])
+        with self.assertRaises(guard['Refusal']):
+            guard['merge_acceptance'](comments, failed_head)
+        with self.assertRaises(guard['Refusal']):
+            guard['merge_acceptance'](comments, self.head)
+
+        self.write_verdict()
+        fresh = self.start('--wait')
+        self.assertEqual(fresh['round'], 2)
+        packet = json.loads(Path(fresh['packet']).read_text())
+        self.assertEqual(packet['slots']['HEAD_SHA'], self.head)
+        self.assertEqual(packet['prior_verdicts'], [verdict])
+        self.published(2)
+        comments = json.loads(self.prcomments.read_text())
+        self.assertEqual(comments[0], failed_comment)
+        self.assertEqual(self.call('status')['rounds'], 2)
+        self.assertEqual(self.call('status')['next'], 'accepted')
+        self.assertEqual(guard['merge_acceptance'](comments, self.head)['record']['head'], self.head)
 
     def test_start_reason_cannot_reopen_accepted_notes_after_another_ruling(self):
         self.start('--wait'); self.published()

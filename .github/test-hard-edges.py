@@ -1616,7 +1616,7 @@ class RoundTest(AcceptanceTest):
             h.round_check(accepted+[self.active(2)], 'a'*40)
         self.assertEqual(h.round_check(self.rows()+[self.active(2)], 'a'*40)['next_round'], 2)
 
-    def test_floor_failures_refuse_dispatch_despite_ruling_and_the_count_does_not(self):
+    def test_floor_two_refuses_an_ordinary_ruling_and_the_count_does_not(self):
         """#434: an eighth round with a continuation ruling is admitted; the count only warns."""
         h = module()
         self.assertTrue(hasattr(h, 'round_check'), 'round admission missing')
@@ -1629,6 +1629,51 @@ class RoundTest(AcceptanceTest):
         rows[0]['body'] = rows[0]['body'].replace('2. Authorization and scope: Pass', '2. Authorization and scope: Fail')
         with self.assertRaisesRegex(h.Refusal, 'Floor check 2'):
             h.round_check(rows+[self.rule(1, 'continue')], 'a'*40)
+
+    def test_floor_two_requires_a_boundary_ruling_for_the_latest_failed_head(self):
+        h = module()
+        rows = self.rows()
+        rows[0]['body'] = rows[0]['body'].replace('2. Authorization and scope: Pass',
+                                                  '2. Authorization and scope: Fail')
+        ruling = self.rule(1, 'continue')
+        prefix, body = ruling['body'].split('```json\n')
+        record = json.loads(body.split('\n```')[0])
+        record['boundary_restoration'] = 'Remove the stray file to restore the original Bounds.'
+        ruling['body'] = prefix + '```json\n' + json.dumps(record) + '\n```\n'
+        for head in ('a'*40, 'b'*40):
+            with self.subTest(head=head):
+                result = h.round_check(rows+[ruling], head, rebase=True)
+                self.assertEqual(result['next_round'], 2)
+                self.assertFalse(result['rebase'])
+                with self.assertRaises(h.Refusal):
+                    h.merge_acceptance(rows+[ruling], head)
+        for changes in ({'head': 'b'*40}, {'round': 2}, {'decision': 'rewrite'},
+                        {'boundary_restoration': '   '}, {'boundary_restoration': None},
+                        {'human_authorization': 'The human requires a fresh lane.'}):
+            stale = dict(ruling, body=prefix+'```json\n'+json.dumps(record | changes)+'\n```\n')
+            with self.subTest(changes=changes), self.assertRaisesRegex(h.Refusal, 'Floor check 2'):
+                h.round_check(rows+[stale], 'b'*40)
+        # An earlier accepted verdict or boundary ruling cannot cover a new Floor-2 failure.
+        newer = dict(rows[0], id=2, body=rows[0]['body'].replace('round 1', 'round 2'))
+        with self.assertRaisesRegex(h.Refusal, 'Floor check 2'):
+            h.round_check(self.rows(goal='Yes')+[ruling, newer], 'a'*40, rebase=True)
+
+    def test_a_later_boundary_ruling_cannot_reopen_a_recorded_human_disposition(self):
+        h = module()
+        rows = self.rows()
+        rows[0]['body'] = rows[0]['body'].replace('2. Authorization and scope: Pass',
+                                                  '2. Authorization and scope: Fail')
+        human = self.rule(1, 'rewrite')
+        prefix, body = human['body'].split('```json\n')
+        record = json.loads(body.split('\n```')[0])
+        human['body'] = prefix+'```json\n'+json.dumps(record | {
+            'human_authorization': 'The human approved a new task and fresh lane.'})+'\n```\n'
+        continued = self.rule(1, 'continue')
+        continued['body'] = prefix+'```json\n'+json.dumps(record | {
+            'decision': 'continue', 'boundary_restoration': 'Remove the stray file.'})+'\n```\n'
+        for intervening in ([], [self.rule(1, 'rewrite')]):
+            with self.subTest(intervening=bool(intervening)), self.assertRaisesRegex(h.Refusal, 'Floor check 2'):
+                h.round_check(rows+[human]+intervening+[continued], 'a'*40)
 
     def test_accepted_recovery_requires_a_ruling_bound_to_that_head(self):
         h = module()
@@ -1693,8 +1738,8 @@ class RoundTest(AcceptanceTest):
         with self.assertRaisesRegex(h.Refusal, 'Floor check 2'):
             h.round_check(floor, 'a'*40, rebase=True)
 
-    def test_emphasized_floor_two_failure_stops_the_lane(self):
-        """The stop-lane trigger reads the parsed decision, never raw verdict text (#260)."""
+    def test_emphasized_floor_two_failure_requires_a_boundary_ruling(self):
+        """The boundary trigger reads the parsed decision, never raw verdict text (#260)."""
         h = module()
         for emphasis in ('*', '**', '_', '__'):
             for wrap in ('result', 'label', 'line'):
@@ -1705,8 +1750,8 @@ class RoundTest(AcceptanceTest):
                         self.assertRaisesRegex(h.Refusal, 'Floor check 2'):
                     h.round_check(rows+[self.rule(1, 'continue')], 'a'*40)
 
-    def test_a_later_contradicting_floor_two_line_still_stops_the_lane(self):
-        """A Fail on any Floor 2 line stops the lane; a passing first line cannot cover it (#260)."""
+    def test_a_later_contradicting_floor_two_line_still_requires_a_boundary_ruling(self):
+        """A Fail on any Floor 2 line requires a ruling; a passing first line cannot cover it (#260)."""
         h = module()
         rows = self.rows()
         rows[0]['body'] = rows[0]['body'].replace('2. Authorization and scope: Pass — checked.',
@@ -2002,13 +2047,14 @@ class VersionBumpTest(unittest.TestCase):
                    'body': ''}
         self.checks = [{'id': i, 'name': name, 'status': 'completed', 'conclusion': 'success'}
                        for i, name in enumerate(['test', f'merged-result / {self.base} / {self.head}'])]
+        self.comments = []
 
     def api(self, endpoint, *args):
         if endpoint == 'repos/o/r': return {'default_branch': 'main', 'owner': {'login': 'o'}}
         if endpoint.endswith('/pulls/12'): return self.pr
         if endpoint.startswith('repos/o/r/rules/branches/'): return []
         if endpoint.endswith('/branches/main'): return {'commit': {'sha': self.base}}
-        if '/comments' in endpoint: return []
+        if '/comments' in endpoint: return self.comments
         if endpoint.endswith('/protection'): return PROTECTED
         if 'check-runs' in endpoint: return {'check_runs': self.checks}
         if '/status?' in endpoint: return {'statuses': []}
@@ -2029,6 +2075,24 @@ class VersionBumpTest(unittest.TestCase):
         self.assertEqual(result['merge'], 'pass')
         self.assertIsNone(result['verdict'])
         self.assertEqual(result['head'], self.head)
+
+    def test_a_bare_bump_after_floor_two_cannot_waive_full_review(self):
+        verdict = AcceptanceTest().verdict().replace('a'*40, self.head)
+        failed = verdict.replace('2. Authorization and scope: Pass',
+                                 '2. Authorization and scope: Fail').replace('Ready to merge: Yes',
+                                                                          'Ready to merge: No')
+        self.comments = [dict(id=1, body=failed, author_association='OWNER')]
+        stderr = io.StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as error:
+            self.guard()
+        self.assertEqual(error.exception.code, 2)
+        self.assertIn('Floor', stderr.getvalue())
+        # Only a new whole passing verdict admits the version-only correction, and it is read.
+        self.comments.append(dict(id=2, body=verdict.replace('round 1', 'round 2'),
+                                  author_association='OWNER'))
+        result = self.guard()
+        self.assertEqual(result['merge'], 'pass')
+        self.assertEqual(result['verdict'], 2)
 
     def test_a_head_not_descended_from_the_current_base_refuses(self):
         tree = self.git('rev-parse', f'{self.base}^{{tree}}')

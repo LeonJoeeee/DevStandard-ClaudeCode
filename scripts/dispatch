@@ -849,8 +849,7 @@ def main():
     rebase_continuation = False
     if args.purpose == 'worker' and existing and pr:
         rows = api(f'repos/{repo}/issues/{pr["number"]}/comments?per_page=100', '--paginate')
-        owner = api(f'repos/{repo}')['owner']['login']
-        rows = [r for r in rows if r.get('user', {}).get('login') == owner]
+        # round_check recognizes review records; preserve the whole history regardless of author.
         # Main moving under an accepted head admits the rebase continuation on the acceptance
         # itself: no ruling, and no review round (#421).
         accounting = round_check(

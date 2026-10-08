@@ -675,8 +675,57 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertEqual(continued['lane_id'], run['lane_id'])
         self.assertEqual(continued['executor_exit'], 0)
 
+    def test_non_owner_accepted_verdict_governs_worker_continuation(self):
+        """#509: both public verdict formats reach the gate regardless of publisher."""
+        import runpy
+        run = self.start('--wait')
+        head = self.git('rev-parse', run['branch'])
+        Path(self.env['PR']).write_text(json.dumps(self.pr(13, run['branch'])))
+        body = runpy.run_path(str(SOURCE / '.github/test-review-packet.py'))['canonical_verdict'](head=head)
+        record = dict(kind='attempt', round=1, head=head, status='returned')
+        verdicts = {
+            'legacy': '## Merge check 1 — round 1\n\n' + body,
+            'record': '## Merge check 1 — round 1\n\n<!-- devstandard-review-v1 -->\n```json\n'
+                      + json.dumps(record) + '\n```\n\n' + body,
+        }
+        options = (*self.continuation_options(), '--pr', '13', '--wait')
+        for format_name, verdict in verdicts.items():
+            with self.subTest(format=format_name):
+                self.env['REVIEW_COMMENTS'] = json.dumps([
+                    dict(id=1, user={'login': 'discussion-author'}, body='Ordinary PR discussion.'),
+                    dict(id=2, user={'login': 'collaborator'}, author_association='COLLABORATOR',
+                         body=verdict)])
+                self.env['PR_BEHIND'] = '0'
+                before = self.comments.read_text()
+                self.assertIn('Notes do not authorize', self.call(*options, ok=False))
+                self.assertEqual(self.comments.read_text(), before)
+                self.env['PR_BEHIND'] = '1'
+                continued = self.call(*options)
+                self.assertEqual(continued['continuation'], 'rebase')
+                self.assertEqual(continued['lane_id'], run['lane_id'])
+                self.assertEqual(continued['executor_exit'], 0)
+
+    def test_non_owner_ruling_prevents_automatic_rebase_continuation(self):
+        """#509: an owner verdict cannot hide a later collaborator's ruling."""
+        import runpy
+        run = self.start('--wait')
+        head = self.git('rev-parse', run['branch'])
+        Path(self.env['PR']).write_text(json.dumps(self.pr(13, run['branch'])))
+        body = runpy.run_path(str(SOURCE / '.github/test-review-packet.py'))['canonical_verdict'](head=head)
+        ruling = dict(kind='ruling', round=1, head=head, decision='continue', reason='Assessed goal gap.')
+        self.env['REVIEW_COMMENTS'] = json.dumps([
+            dict(id=1, user={'login': 'o'}, body='## Merge check 1 — round 1\n\n' + body),
+            dict(id=2, user={'login': 'collaborator'}, author_association='COLLABORATOR',
+                 body='## Review ruling — after round 1\n\n<!-- devstandard-review-v1 -->\n```json\n'
+                      + json.dumps(ruling) + '\n```\n')])
+        self.env['PR_BEHIND'] = '1'
+        before = self.comments.read_text()
+        self.assertIn('Notes do not authorize',
+                      self.call(*self.continuation_options(), '--pr', '13', ok=False))
+        self.assertEqual(self.comments.read_text(), before)
+
     def test_worker_continuation_surfaces_accounting_warnings_without_refusing(self):
-        """#482: a round gap and stale reservation are reported through every carrier."""
+        """#482/#509: every carrier reports non-owner round gaps and reservations."""
         import runpy
         run = self.start('--wait')
         head = self.git('rev-parse', run['branch'])
@@ -686,8 +735,10 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
             'Ready to merge: Yes', 'Ready to merge: No')
         reservation = dict(kind='attempt', round=3, head=head, status='reserved')
         self.env['REVIEW_COMMENTS'] = json.dumps([
-            dict(id=1, user={'login': 'o'}, body='## Merge check 1 — round 2\n\n' + body),
-            dict(id=2, user={'login': 'o'}, body='## Review attempt — round 3\n\n'
+            dict(id=1, user={'login': 'reviewer'}, author_association='COLLABORATOR',
+                 body='## Merge check 1 — round 2\n\n' + body),
+            dict(id=2, user={'login': 'org-member'}, author_association='MEMBER',
+                 body='## Review attempt — round 3\n\n'
                  '<!-- devstandard-review-v1 -->\n```json\n' + json.dumps(reservation) + '\n```\n')])
         for implementation in ('codex', 'claude-cli', 'claude'):
             with self.subTest(implementation=implementation):

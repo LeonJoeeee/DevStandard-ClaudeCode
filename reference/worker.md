@@ -103,7 +103,7 @@ one, says how you recover your binding, what you may spawn, and what your sandbo
 Implement the accepted design in this lane. Make the decisions it leaves within Bounds and disclose
 material choices in the PR. Update every document the change invalidates in the same diff. A PRD or
 architecture expansion returns before implementation. For a `CLAUDE.md` update, use
-`reference/repo-claude-md.md`'s content fence.
+`reference/repo-claude-md.md` for guidance.
 
 Write code, comments, documentation, commits, and GitHub records in the packet's language. Product
 text follows its audience. Use the supplied commit attribution. Read the whole diff before delivery

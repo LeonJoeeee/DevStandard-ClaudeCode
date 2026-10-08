@@ -516,7 +516,7 @@ action.
 inspect existing changes; admit documentation through `reference/in-repo-writes.md`; and place
 files through `reference/where-it-goes.md`. Update invalidated guidance, keep task state on the
 issue/PR, and drive checks and bot findings as the PR owner. For a `CLAUDE.md` update, use
-`reference/repo-claude-md.md`'s content fence. Worker craft bindings are optional for the
+`reference/repo-claude-md.md` for guidance. Worker craft bindings are optional for the
 orchestrator's small direct edits.
 
 **Repositories, secrets, and language:** references resolve from the plugin root. Another

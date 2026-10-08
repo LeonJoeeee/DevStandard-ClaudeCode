@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-08-28). Amends 0012 (pre-handback cleanup before teardown inventory), 0017
 (trigger gating and established path selection for every document kind), and 0018 (its write-back is
-limited to the existing `CLAUDE.md` fence). Amended by 0042 (2026-08-31).
+limited to the existing `CLAUDE.md` fence). Amended by 0042 (2026-08-31). Amended (2026-10-08).
 
 ## Context
 
@@ -56,3 +56,12 @@ committed only when it is material the repo maintains, and otherwise removed. �
 outside the promise” describes snapshot visibility and ignored paths nobody has named; it does not
 license losing a known must-keep artifact. Any kept file whose only durable copy is in the worktree is
 named and moved out or discarded before teardown, even when the snapshot cannot see it.
+
+**Amendment (2026-10-08, issue #503):** the Decision's claim that `CLAUDE.md`'s content fence
+cannot be bypassed is retired. `reference/in-repo-writes.md` still admits the repo-root file on
+its own trigger — operational memory needs an update — and reserves that entry point, but tests
+none of its content. `reference/repo-claude-md.md` offers guidance; the repository owner chooses
+what the file holds. The predicate's other arms and method triggers are unchanged. What a
+document is still governs every edit: a handoff or session-state artifact must qualify on every
+edit whatever its path, syntax, or extension, including when it is called `CLAUDE.md`. The clean-tree
+and competing-authority rules stand, as does the operational write-back duty.

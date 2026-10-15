@@ -484,7 +484,8 @@ failure on that PR, needs no issue or check 1—CI lockstep is its review—but 
 
 Release only under the human's words or standing delegation, which only they grant or withdraw. A
 major release needs explicit direction. Keep release manifests in lockstep at the next version
-above current main, perform the authorized release after cleanup, and report the result.
+above current main, perform the authorized release after cleanup, and report the result; for a service
+deploy, follow [deployment discipline](deployments.md#deploying-a-self-hosted-service).
 
 ## 4. Interacting with the human
 

@@ -3,7 +3,7 @@
 Read this at project start, after the skeleton exists. Two robots, generated once — then they age with GitHub, not with the project:
 
 - **CI** — for pushes and PRs, use the CI template below and `reference/orchestrator.md`'s Branch protection section.
-- **Release (CD)** — every project must ANSWER the release question: *what does "shipping" mean here?* A service → deploy; a tool/library → publish a package; a plugin → publish to its marketplace/repo. Default trigger: **a version tag** — use the release template below; the human decides when to tag. Fully-automatic release-on-merge is a per-project opt-in, not the default.
+- **Release (CD)** — every project must ANSWER the release question: *what does "shipping" mean here?* A service → deploy (follow [deployment discipline](deployments.md#deploying-a-self-hosted-service)); a tool/library → publish a package; a plugin → publish to its marketplace/repo. Default trigger: **a version tag** — use the release template below; the human decides when to tag. Fully-automatic release-on-merge is a per-project opt-in, not the default.
 
 Adapt the templates to the project's language/toolchain (swap the test command and the release steps). Keep each file minimal — these are gates, not build systems.
 

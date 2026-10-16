@@ -597,8 +597,10 @@ points here for; that page keeps the decision and the command line).
 
   CLI run state. This is the only liveness the dispatcher observes: a native handle is the
   caller's, and the handle recorded on the issue is its evidence. The supervisor's atomic
-  completion marker establishes an observed exit. PIDs are diagnostic; a held supervisor_lock
-  means running; an absent marker with a free or missing lock means lost or unknown, never done.
+  completion marker at the run record's completion file path (exit-code) establishes an observed
+  exit; its launch_failure file path (launch-failure) records that the executor never started.
+  PIDs are diagnostic; a held supervisor_lock means running; an absent marker with a free or
+  missing lock means lost or unknown, never done.
   Retain the run directory, brief identity, lock, output, log and marker through lane cleanup.
   Process exit and prose claims establish neither the PR nor its evidence -- read the output.
 

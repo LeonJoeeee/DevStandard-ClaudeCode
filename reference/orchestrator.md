@@ -80,7 +80,7 @@ no observable completion.
 | Issues meeting “Ready and the issue” below | Dispatch each in an isolated lane; cut overlap, never concurrency, then return. |
 | Worker delivery | Treat it as a claim; process exit is not acceptance. Inspect the PR and take ownership of unreported checks. |
 | Green PR | Take deliveries one at a time: if main moved, continue the lane owner for the rebase first. Then start a clean acceptance review on that head with the current-source packet assembler. |
-| Verdict | Publish it whole immediately; judge Goal and both Floors, then integrate or decide continuation. |
+| Verdict | Publish it whole immediately; judge Goal and both Floors, then integrate or decide continuation; integration ends with the lane's cleanup. |
 | Conflict after delivery | Assign resolution to the available lane owner; verify changed content and re-review substantive differences. |
 | Irreversible action | Stop and ask the human; “Guarded operations” owns integration commands and their limits. |
 | Red main | Freeze new dispatch and follow §5. |

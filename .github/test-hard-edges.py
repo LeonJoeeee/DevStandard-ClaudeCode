@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import runpy
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -2325,12 +2326,14 @@ class MergeTest(AcceptanceTest):
         self.assertIn('CI failing', refusal)
 
     def test_a_verified_head_merges_with_squash(self):
+        self.pr['body'] = 'Closes #515'
         code, out, err = self.guard()
         self.assertEqual(code, 0, err)
         result = json.loads(out)
         self.assertEqual(result['merge'], 'pass')
         self.assertEqual(result['head'], self.HEAD)
         self.assertEqual(result['checks'], self.observed)
+        self.assertNotIn('next', result, 'a dry run has no integrated lane to clean up')
         self.assertEqual(self.writes, [], 'a read-only check must not merge')
         code, out, err = self.guard('--execute')
         self.assertEqual(code, 0, err)
@@ -2339,6 +2342,42 @@ class MergeTest(AcceptanceTest):
             '-f', 'merge_method=squash',
             '-f', 'commit_title=fix: restore squash history (#232) (#12)',
             '-f', 'commit_message=' + self.TRAILERS))])
+
+    def test_an_executed_merge_names_the_linked_issue_cleanup_command(self):
+        for body in ('Closes #515', 'architecture-level: false\n\ncloses #515.'):
+            with self.subTest(body=body):
+                self.pr['body'] = body
+                code, out, err = self.guard('--execute')
+                self.assertEqual(code, 0, err)
+                result = json.loads(out)
+                self.assertTrue(result['result']['merged'])
+                self.assertIn('next', result)
+                self.assertEqual(shlex.split(result['next']), [
+                    str(ROOT / 'scripts/dispatch'), '515', '--cleanup', '--pr', '12',
+                    '--project', str(ROOT)])
+
+    def test_an_executed_merge_does_not_guess_an_unlinked_issue(self):
+        for body in ('architecture-level: false', 'See #515.', '', None):
+            with self.subTest(body=body):
+                self.pr['body'] = body
+                code, out, err = self.guard('--execute')
+                self.assertEqual(code, 0, err)
+                result = json.loads(out)
+                self.assertIn('next', result)
+                self.assertEqual(shlex.split(result['next']), [
+                    str(ROOT / 'scripts/dispatch'), '<issue>', '--cleanup', '--pr', '12',
+                    '--project', str(ROOT)])
+
+    def test_the_cleanup_command_quotes_the_verified_project_path(self):
+        self.pr['body'] = 'Closes #515'
+        project = ROOT / 'checkout with spaces; $literal'
+        code, out, err = self.guard('--execute', '--project', str(project))
+        self.assertEqual(code, 0, err)
+        result = json.loads(out)
+        self.assertIn('next', result)
+        self.assertEqual(shlex.split(result['next']), [
+            str(ROOT / 'scripts/dispatch'), '515', '--cleanup', '--pr', '12',
+            '--project', str(project)])
 
     def test_unreadable_protection_no_longer_blocks_a_verified_merge(self):
         """#435: GitHub enforces every moved condition server-side at the merge itself.

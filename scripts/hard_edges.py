@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import tempfile
 from urllib.parse import quote
@@ -443,6 +444,11 @@ def merge_check(project, repo, number, old_base=None, old_head=None, execute=Fal
                               '-f', 'commit_message=' + '\n'.join(trailers))
         require(result['result'].get('merged'),
                 'GitHub refused the verified merge: ' + result['result'].get('message', ''))
+        issue = re.search(r'\bCloses\s+#([1-9][0-9]*)\b', pr.get('body') or '', re.I)
+        result['next'] = shlex.join([
+            str(Path(__file__).absolute().with_name('dispatch')),
+            issue.group(1) if issue else '<issue>', '--cleanup', '--pr', str(number),
+            '--project', str(Path(project).absolute())])
     return result
 
 

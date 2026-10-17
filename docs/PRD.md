@@ -103,7 +103,7 @@ loop {
                             (`reference/orchestrator.md` defines the moment)
                             (cut scopes to minimize file overlap)
   A worker delivers       → acceptance → start the review
-  A verdict returns       → met: merge, release, clean up
+  A verdict returns       → met: merge, clean up, release
                             not met: return | conflict: dispatch a resolver
   Main goes red           → freeze new dispatch; revert first
   Idle                    → sweep leftovers; report progress

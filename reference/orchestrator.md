@@ -68,6 +68,11 @@ Before ending a turn with work outstanding, arrange what will wake you: watch th
 waiting for or schedule a timed return. Never rely on remembering to look. A finished but unattended
 lane otherwise looks exactly like one still running.
 
+For a dispatched CLI run, watch the run record's `completion` (`exit-code`) and `launch_failure`
+(`launch-failure`) file paths in a background invocation so the harness re-invokes you on exit, with
+a timeout that ends the invocation if neither sentinel arrives. Keep a timed return for waits with
+no observable completion.
+
 | Event | Next action |
 |---|---|
 | Human message | Restate it under §4, then discuss the result and why, report a problem, update an issue, or adjust direction. |

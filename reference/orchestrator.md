@@ -183,7 +183,9 @@ supported executor for one dispatch or standing until their next instruction. Th
 the orchestrator, not in a project file. The default is `--implementation codex`; Codex runs as a
 CLI process, `--implementation codex`, for a worker or an independent read-only gating reviewer
 under `reference/harness-codex.md`. Claude CLI supports workers and reviewers with host/tool
-permissions. CLI reviewers run in an independent one-off checkout of the pinned head; Codex uses
+permissions. Antigravity CLI (`--implementation agy`) supports both roles under
+`reference/harness-antigravity.md`, with `--dangerously-skip-permissions`. CLI reviewers run in an
+independent one-off checkout of the pinned head; Codex uses
 `workspace-write` with network and a grant only to the copy's Git metadata. The dispatch process owns
 creation and removal in run scratch, including nonzero exits and handled cancellation; setup
 failure launches no reviewer.
@@ -192,8 +194,9 @@ rule forbidding file writes there. All reviewers are read-only toward the reposi
 no comments, PR or issue edits, pushes, or remote state changes; the caller publishes the verdict.
 Claude's built-in file writers stay denied and the reviewer `gh api` write-flag hook stays.
 Native workers inherit host permissions; Codex CLI workers receive an OS sandbox scoped to
-their lane. Never use a bypass-all-sandboxing mode. Report a blocked required action instead of
-loosening the sandbox.
+their lane. Each harness page states its permission posture; agy reviewers remain read-only by
+contract. Under agy bypass every configured and enabled MCP server is callable: the operator must
+not configure a server a role must not reach. There is no agy MCP admission layer.
 
 Codex CLI dispatch's hook-trust bypass is invocation-wide, not limited to the fixed role hook.
 Before dispatch, vet every effective enabled hook source, including installed plugin hooks. The
@@ -216,27 +219,29 @@ reviewer are anchored: model and effort are fixed for the role, not routed per t
 order is `gpt-6-astra` above `gpt-6.1-sol` above `gpt-6-sol`, with `gpt-6-luna` cheapest; the Claude
 Code side names only tier aliases, whose model resolution belongs to the host.
 
-| Role | Codex | Claude |
-|---|---|---|
-| worker | `gpt-6.1-sol` at `xhigh` | `opus` at `max` |
-| reviewer | `gpt-6.1-sol` at `xhigh` | `opus` at `max` |
+| Role | Codex | Claude | Antigravity |
+|---|---|---|---|
+| worker | `gpt-6.1-sol` at `xhigh` | `opus` at `max` | `gemini-3.8-flash` at `high` |
+| reviewer | `gpt-6.1-sol` at `xhigh` | `opus` at `max` | `gemini-4-argon` at `medium` |
 
 `scripts/dispatch` reads those two rows, so keep the cell form. Arbitration — a genuine dilemma,
-an irreversible judgment, an architecture-level acceptance — takes Codex `gpt-6-astra` at `max`,
-read-only from this session. It informs the decision and does not make it: a genuine dilemma or
-irreversible judgment still goes to the human (the stuck-work ladder below). With a PR, commission
-it through the Codex reviewer path:
-`review-packet start --implementation codex --model gpt-6-astra --effort max --wait`. Before a PR exists,
-run a fresh, history-free Codex process from the checkout with the question and its evidence on
-stdin, and post the captured answer on the issue as the durable record:
+an irreversible judgment, an architecture-level acceptance — defaults to Antigravity
+`gemini-4-argon` at `high`, fresh and read-only by contract. It informs the decision; a genuine
+dilemma or irreversible judgment still goes to the human (the stuck-work ladder below). With a PR,
+commission it through the fresh reviewer path:
+`review-packet start --implementation agy --model gemini-4-argon --effort high --wait`.
+Before a PR exists, run a fresh process with the question and evidence on stdin and publish the
+captured answer on the issue. For the verified NDJSON envelope and result parsing, see
+`reference/harness-antigravity.md`:
 
 ```sh
-codex exec --ephemeral -s read-only -m gpt-6-astra -c model_reasoning_effort='"max"' -o <session-scratch>/answer.md - < <session-scratch>/question.md
+python3 -c 'import json,sys; print(json.dumps({"event":"user","message":{"content":"Read-only arbitration: inspect evidence and return an answer; do not change repository or remote state.\n"+sys.stdin.read()}}))' < <session-scratch>/question.md | agy --input-format stream-json --output-format stream-json --model gemini-4-argon-high --dangerously-skip-permissions > <session-scratch>/answer.jsonl
 ```
 
-When Codex is out of quota, arbitration falls back to the built-in Claude `fable` with session
-effort `max`. This adds no arbitration tier; the fresh, independent, read-only contract still
-applies, and the answer is published on the issue or PR.
+Read the final result's response and check the exit, status and every `denied_actions` entry before
+using it. When agy is unavailable or out of quota, fall back explicitly to Codex `gpt-6-astra` at
+`max`, then the built-in Claude `fable` at session effort `max`. Each fallback preserves a fresh,
+independent, read-only process or native reviewer and durable answer publication.
 
 A helper — a one-off subagent any role spawns for its own task — is neither anchored role and never
 goes through `scripts/dispatch` or `scripts/review-packet`. It always uses its own harness's
@@ -275,8 +280,10 @@ undefined effort inherits the session's. A project's `CLAUDE.md`, the issue, or 
 <plugin>/scripts/dispatch 123 --adopt --base origin/main --branch <existing-branch> --worktree <existing-worktree> --pr 124
 <plugin>/scripts/dispatch 123 --purpose reviewer --packet <complete-review-packet> --wait
 <plugin>/scripts/dispatch 123 --cleanup --pr 124
-# Codex CLI worker
+# Codex CLI worker (the default)
 <plugin>/scripts/dispatch 123 --purpose worker --base origin/main --implementation codex --wait
+# Antigravity CLI worker
+<plugin>/scripts/dispatch 123 --purpose worker --base origin/main --implementation agy --wait
 ```
 
 Fetch the named base first. For lane identities and continuation flags, use
@@ -328,8 +335,10 @@ alone defines judging: Goal and both Floors decide readiness. Record failed atte
 ```sh
 <plugin>/scripts/review-packet assemble 124 --issue 123 --architecture-level no --output <session-scratch>
 <plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --wait
-# Codex CLI reviewer
+# Codex CLI reviewer (the default)
 <plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --implementation codex --wait
+# Antigravity CLI reviewer
+<plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --implementation agy --wait
 <plugin>/scripts/review-packet status 124 --issue 123
 # Claude reviewer, after invoking the returned Agent instruction
 <plugin>/scripts/review-packet publish 124 --issue 123 --attempt <comment-id> --verdict <verdict-file>

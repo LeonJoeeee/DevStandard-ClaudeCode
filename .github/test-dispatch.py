@@ -88,7 +88,7 @@ elif a[:2]==['issue','comment']:
   import time
   time.sleep(.2)
   Path(os.environ['PUBLICATION_PROBE']).write_text(json.dumps(dict(record=record,started=Path(record['output']).exists())))
- if record['kind']=='run' and os.environ.get('REJECT_RUN_PUBLICATION'): raise SystemExit('fixture publication failed')
+ if record['kind']=='run' and (os.environ.get('REJECT_RUN_PUBLICATION') or (record.get('status')=='returned' and os.environ.get('REJECT_COMPLETION_PUBLICATION'))): raise SystemExit('fixture publication failed')
  rows=json.loads(c.read_text());rows.append({'id':len(rows)+1,'body':Path(a[a.index('--body-file')+1]).read_text()});w(rows);print('https://github.com/o/r/issues/12#issuecomment-'+str(len(rows)))
 elif a[:2]==['pr','view']:
  data=json.loads(Path(os.environ['PR']).read_text());rows=data if isinstance(data,list) else [data]
@@ -142,6 +142,22 @@ hold=os.environ.get('FAKE_HOLD');deadline=time.monotonic()+20
 while hold and not __import__('pathlib').Path(hold).exists() and time.monotonic()<deadline: time.sleep(.01)
 raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
 ''')
+        self.tool('agy', """import json,os,sys
+from pathlib import Path
+a=sys.argv[1:]; raw=sys.stdin.read(); rows=[json.loads(line) for line in raw.splitlines()]
+assert len(rows)==1 and rows[0]['event']=='user'
+prompt=rows[0]['message']['content']
+data=dict(args=a,stdin=prompt,cwd=os.getcwd(),role=os.environ.get('DEVSTANDARD_ROLE'))
+print(json.dumps(dict(event='init',conversation_id='fixture-conversation',init=dict(permission_mode='always-proceed'))))
+if os.environ.get('FAKE_AGY_EARLY_DENIAL'):
+ print(json.dumps(dict(event='result',result=dict(status='SUCCESS',response='earlier',denied_actions=[{'tool':'run_command'}]))))
+if os.environ.get('FAKE_AGY_RAW'):
+ print(os.environ['FAKE_AGY_RAW'])
+else:
+ response=os.environ.get('FAKE_AGY_RESPONSE') or (Path(os.environ['VERDICT']).read_text() if os.environ.get('VERDICT') else json.dumps(data))
+ print(json.dumps(dict(event='result',result=dict(status=os.environ.get('FAKE_AGY_STATUS','SUCCESS'),response=response,conversation_id='fixture-conversation',usage={'input_tokens':42},denied_actions=json.loads(os.environ.get('FAKE_AGY_DENIALS','[]')))),ensure_ascii=False))
+raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
+""")
         self.script = SOURCE / 'scripts/dispatch'
 
     def tool(self, name, body):
@@ -822,8 +838,8 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         source=install/'reference/orchestrator.md'
         import re
         source.write_text(source.read_text().replace(
-            '| worker | `gpt-6.1-sol` at `xhigh` | `opus` at `max` |',
-            '| worker | `fixture-model` at `low` | `opus` at `max` |'))
+            '| worker | `gpt-6.1-sol` at `xhigh` | `opus` at `max` | `gemini-3.8-flash` at `high` |',
+            '| worker | `fixture-model` at `low` | `opus` at `max` | `gemini-3.8-flash` at `high` |'))
         self.script=install/'scripts/dispatch'
         run=self.start('--implementation','codex')
         data=self.finish(run);a=data['args']
@@ -1379,6 +1395,110 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
         self.assertEqual(run['executor_exit'], 0)
         self.assertNotIn('instruction', run)
 
+    def test_agy_worker_delivers_long_unicode_brief_and_captures_response_and_conversation(self):
+        brief=self.root/'long-brief.txt'
+        brief.write_text('Long brief: '+('evidence 漢字 "quoted"\n'*15000)+'END_OF_BRIEF')
+        run=self.start('--implementation','agy','--brief',str(brief))
+        data=self.finish(run); args=data['args']
+        self.assertEqual(args, ['--input-format','stream-json','--output-format','stream-json',
+                               '--model','gemini-3.8-flash-high','--dangerously-skip-permissions'])
+        self.assertEqual(data['stdin'],Path(run['brief']).read_text())
+        self.assertIn(brief.read_text(),data['stdin'])
+        self.assertIn('Co-Authored-By: Antigravity gemini-3.8-flash high <noreply@google.com>',data['stdin'])
+        self.assertIn('Antigravity CLI worker',data['stdin'])
+        self.assertNotIn('A Codex CLI worker',data['stdin'])
+        self.assertEqual(data['cwd'],run['worktree'])
+        self.assertEqual(data['role'],'worker')
+        self.assertEqual(run['conversation_id'],'fixture-conversation')
+        self.assertEqual(run['usage'],{'input_tokens':42})
+        self.assertEqual(self.lane_records()[-1]['conversation_id'],'fixture-conversation')
+        self.assertEqual(run['permission_mode'],'always-proceed')
+        self.assertTrue(Path(run['events']).read_text().startswith('{"event": "init"'))
+
+    def test_agy_continuation_uses_the_same_lane_conversation_but_reviewer_is_fresh(self):
+        worker=self.start('--implementation','agy')
+        brief=self.root/'continuation.txt';brief.write_text('Finish the same task.')
+        continued=self.call('--purpose','worker','--implementation','agy','--continue','--brief',str(brief))
+        args=self.finish(continued)['args']
+        self.assertEqual(args[-2:],['--conversation','fixture-conversation'])
+        self.assertEqual(continued['worktree'],worker['worktree'])
+        packet=self.review_packet()
+        reviewed=self.call('--purpose','reviewer','--implementation','agy','--packet',str(packet))
+        data=self.finish(reviewed)
+        self.assertNotIn('--conversation',data['args'])
+        self.assertIn('--dangerously-skip-permissions',data['args'])
+        self.assertEqual(data['args'][data['args'].index('--model')+1],'gemini-4-argon-medium')
+        self.assertIn('Reviewer: Antigravity, gemini-4-argon at medium, read-only — reviewed',data['stdin'])
+        self.assertEqual(data['cwd'],reviewed['review_checkout'])
+        self.assertNotEqual(data['cwd'],worker['worktree'])
+        self.assertFalse(Path(reviewed['review_checkout']).exists())
+
+    def test_agy_response_unicode_separators_are_not_ndjson_record_boundaries(self):
+        response='Before\u0085middle\u2028after\u2029end'
+        self.env['FAKE_AGY_RESPONSE']=response
+        run=self.start('--implementation','agy')
+        self.assertEqual(Path(run['output']).read_text(),response)
+        self.assertEqual(run['conversation_id'],'fixture-conversation')
+
+    def test_agy_explicit_model_and_effort_are_decorated_once(self):
+        run=self.start('--implementation','agy','--model','override-model','--effort','low')
+        args=self.finish(run)['args']
+        self.assertEqual(args[args.index('--model')+1],'override-model-low')
+        self.assertNotIn('--effort',args)
+
+    def test_agy_completed_receipt_failure_preserves_return_and_can_be_republished(self):
+        self.env['REJECT_COMPLETION_PUBLICATION']='1'
+        completed=subprocess.run([sys.executable,str(self.script),'12','--project',str(self.project),
+            '--purpose','worker','--base','origin/main','--implementation','agy','--wait'],
+            env=self.env,text=True,capture_output=True)
+        self.assertEqual(completed.returncode,2,completed.stdout+completed.stderr)
+        self.assertTrue(completed.stdout.strip(),'observed return was lost: '+completed.stderr)
+        run=json.loads(completed.stdout)
+        self.assertEqual(run['executor_exit'],0)
+        self.assertEqual(run['conversation_id'],'fixture-conversation')
+        self.assertIn('fixture publication failed',run['receipt_error'])
+        self.assertTrue(self.finish(run))
+        del self.env['REJECT_COMPLETION_PUBLICATION']
+        result=subprocess.run(['gh','issue','comment','12','--repo','o/r','--body-file',run['receipt']],
+                              env=self.env,text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(self.lane_records()[-1]['conversation_id'],'fixture-conversation')
+        brief=self.root/'continuation.txt';brief.write_text('Finish the same task.')
+        continued=self.call('--purpose','worker','--implementation','agy','--continue','--brief',str(brief))
+        self.assertEqual(self.finish(continued)['args'][-2:],['--conversation','fixture-conversation'])
+
+    def test_agy_nonzero_exit_is_preserved_with_its_response(self):
+        self.env['FAKE_EXIT']='9'
+        run=self.start('--implementation','agy',exit_code=9)
+        self.assertEqual(run['executor_exit'],9)
+        self.assertTrue(self.finish(run))
+
+    def test_agy_denied_actions_even_in_an_earlier_result_fail_the_harness(self):
+        for env in ({'FAKE_AGY_DENIALS':'[{"tool":"run_command"}]'}, {'FAKE_AGY_EARLY_DENIAL':'1'}):
+            with self.subTest(env=env):
+                fixture=DispatchTest();fixture.setUp()
+                try:
+                    fixture.env.update(env)
+                    run=fixture.start('--implementation','agy',exit_code=1)
+                    self.assertEqual(run['executor_exit'],0)
+                    self.assertIn('denied_actions',run['harness_error'])
+                    self.assertTrue(Path(run['events']).exists())
+                finally: fixture.doCleanups()
+
+    def test_agy_missing_malformed_or_unsuccessful_result_fails_the_harness(self):
+        for env in ({'FAKE_AGY_RAW':'{"event":"step_update"}'},
+                    {'FAKE_AGY_RAW':'not JSON'},
+                    {'FAKE_AGY_RAW':'{"event":"result","result":{"status":"SUCCESS","response":"answer"}}'},
+                    {'FAKE_AGY_STATUS':'ERROR'}):
+            with self.subTest(env=env):
+                fixture=DispatchTest();fixture.setUp()
+                try:
+                    fixture.env.update(env)
+                    run=fixture.start('--implementation','agy',exit_code=1)
+                    self.assertIn('harness_error',run)
+                    self.assertEqual(run['executor_exit'],0)
+                finally: fixture.doCleanups()
+
     def install_claude_anchor(self, page_cell):
         """An installed plugin whose Claude worker anchor is the given page cell."""
         install = self.root/'plugin with spaces'
@@ -1386,8 +1506,8 @@ raise SystemExit(int(os.environ.get('FAKE_EXIT','0')))
             shutil.copytree(SOURCE/directory, install/directory)
         page = install/'reference/orchestrator.md'
         page.write_text(page.read_text().replace(
-            '| worker | `gpt-6.1-sol` at `xhigh` | `opus` at `max` |',
-            '| worker | `gpt-6.1-sol` at `xhigh` | ' + page_cell + ' |'))
+            '| worker | `gpt-6.1-sol` at `xhigh` | `opus` at `max` | `gemini-3.8-flash` at `high` |',
+            '| worker | `gpt-6.1-sol` at `xhigh` | ' + page_cell + ' | `gemini-3.8-flash` at `high` |'))
         self.script = install/'scripts/dispatch'
         return install
 

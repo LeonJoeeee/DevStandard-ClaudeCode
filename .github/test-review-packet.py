@@ -1239,6 +1239,47 @@ while True: signal.pause()
         self.call('publish', '--attempt', '100')
         self.assertEqual(self.prcomments.read_text(), before)
 
+    def agy_verdict(self):
+        self.verdict.write_text(self.verdict.read_text().replace(
+            'Codex, gpt-6.1-sol at xhigh', 'Antigravity, gemini-4-argon at medium'))
+
+    def test_agy_start_publishes_the_whole_verdict_with_its_identity(self):
+        self.agy_verdict()
+        result=self.call('start','--implementation','agy','--wait','--architecture-level','no','--output',str(self.out))
+        self.assertEqual(result['identity'],'Antigravity, gemini-4-argon at medium, read-only')
+        self.assertEqual(result['run']['conversation_id'],'fixture-conversation')
+        self.assertTrue(self.published()[-1]['body'].endswith(self.verdict.read_text()))
+        self.assertEqual(self.call('status')['next'],'accepted')
+        self.call('publish','--attempt',str(result['attempt']))
+        self.assertEqual(self.call('status')['rounds'],1)
+
+    def test_agy_completed_issue_receipt_failure_keeps_the_observed_reviewer_return(self):
+        self.agy_verdict();self.env['REJECT_COMPLETION_PUBLICATION']='1'
+        result=self.call('start','--implementation','agy','--wait','--architecture-level','no','--output',str(self.out))
+        self.assertEqual(result['run']['executor_exit'],0)
+        self.assertIn('fixture publication failed',result['run']['receipt_error'])
+        self.assertEqual(result['publication']['status'],'returned')
+        self.assertTrue(self.published()[-1]['body'].endswith(self.verdict.read_text()))
+        self.assertEqual(self.call('status')['next'],'accepted')
+
+    def test_agy_denied_action_cannot_publish_an_accepted_review(self):
+        self.agy_verdict();self.env['FAKE_AGY_EARLY_DENIAL']='1'
+        result=self.call('start','--implementation','agy','--wait','--architecture-level','no','--output',str(self.out))
+        sys.path.insert(0,str(SOURCE/'scripts'))
+        try:
+            guard=runpy.run_path(str(SOURCE/'scripts/hard_edges.py'))
+        finally:
+            sys.path.pop(0)
+        rows=[dict(row,author_association='OWNER') for row in json.loads(self.prcomments.read_text())]
+        with self.assertRaises(guard['Refusal']):
+            guard['merge_acceptance'](rows,self.head)
+        self.assertEqual(result['publication']['status'],'failed')
+        self.assertNotEqual(self.call('status')['next'],'accepted')
+        self.assertEqual(self.call('status')['rounds'],0)
+        self.assertTrue(rows[-1]['body'].startswith('## Review attempt'))
+        self.assertTrue(rows[-1]['body'].endswith(self.verdict.read_text()))
+        self.assertIn('denied_actions',rows[-1]['body'])
+
     def test_start_dispatches_and_publishes_whole_verdict_once(self):
         result=self.start();comments=self.published()
         verdicts=[r for r in comments if r['body'].startswith('## Merge check 1 — round ')]

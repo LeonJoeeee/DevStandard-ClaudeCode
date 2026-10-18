@@ -19,13 +19,14 @@ here are **Unverified** target requirements.
 
 The supported configuration is one Claude Code orchestrator with N dispatched executors. A
 dispatched executor has one of two purposes, worker or reviewer. Implementations are Claude-native
-subagents, Codex CLI processes and Claude CLI processes. A conflict resolver is a
+subagents, Codex CLI processes, Claude CLI processes and Antigravity CLI processes. A conflict resolver is a
 worker assigned a conflict task, not a third role. This is the smallest configuration that removes scheduling from the human while
 retaining the GitHub flow and native isolation mechanisms (PRD §1.1, §2.1, §2.2).
 
 DevStandard is a supplementary harness. The host owns its sessions, hooks, native subagents,
 tools, models and permissions; a dispatched Codex CLI process also owns its sandbox. Claude CLI
-workers use host/tool permissions and the assigned worktree. DevStandard supplies the
+workers use host/tool permissions and the assigned worktree. Antigravity uses the same lane
+contract with `--dangerously-skip-permissions` and no MCP admission layer (ADR 0066). DevStandard supplies the
 missing collaboration protocol: role context, dispatch, acceptance, and the transitions between
 GitHub artifacts. It replaces neither the native harness nor the Codex CLI's (PRD §1.1, §1.5).
 
@@ -84,10 +85,10 @@ without mixing in the worker set described below.
 There is one dispatched-executor construct. Purpose determines its context and authority;
 implementation determines how that context is delivered.
 
-| Purpose | Claude-native | Codex CLI | Claude CLI | Result |
-|---|---|---|---|---|
-| Worker | `devstandard:worker`'s body is `reference/worker.md` followed by `reference/harness-claude.md`, concatenated byte for byte, so the harness carries the contract and this harness's mechanics as the subagent's system prompt with no read (ADR 0060, ADR 0061); its frontmatter fixes the skill and hook bindings, and dispatch supplies the issue, lane and explicit purpose-routed model/effort. | Dispatch supplies the shared role plus `reference/harness-codex.md`'s worker-facing section, the task, explicit settings and a sandbox granting the worktree plus required linked-worktree git metadata. | Explicit worker process with the same role/task and assigned worktree, using host/tool permissions and noninteractive `acceptEdits`, without a sandbox bypass. | A green PR linked to the issue, rebased on current `main`, with final-state evidence. |
-| Reviewer | `devstandard:reviewer` fixes the judging role, empty skills and denial of built-in writers; dispatch supplies model/effort and the packet. Agent inherits the session cwd, with the written rule forbidding file and remote writes. | Dispatch supplies the contract and packet in an independent one-off checkout of the pinned head, with `workspace-write`, network and a grant only to the copy's Git metadata. | Same pinned one-off checkout and contract, using host/tool permissions and noninteractive `acceptEdits`, with built-in writers denied. | A verdict naming the reviewer and reviewed head, published whole by the caller; the reviewer never changes the repository or its remote. |
+| Purpose | Claude-native | Codex CLI | Claude CLI | Antigravity CLI | Result |
+|---|---|---|---|---|---|
+| Worker | `devstandard:worker`'s body is `reference/worker.md` followed by `reference/harness-claude.md`, concatenated byte for byte, so the harness carries the contract and this harness's mechanics as the subagent's system prompt with no read (ADR 0060, ADR 0061); its frontmatter fixes the skill and hook bindings, and dispatch supplies the issue, lane and explicit purpose-routed model/effort. | Dispatch supplies the shared role plus `reference/harness-codex.md`'s worker-facing section, the task, explicit settings and a sandbox granting the worktree plus required linked-worktree git metadata. | Explicit worker process with the same role/task and assigned worktree, using host/tool permissions and noninteractive `acceptEdits`, without a sandbox bypass. | The shared worker contract plus the marked `reference/harness-antigravity.md` mechanics and full packet arrive through stream-json stdin; the process uses host permissions with `--dangerously-skip-permissions`. | A green PR linked to the issue, rebased on current `main`, with final-state evidence. |
+| Reviewer | `devstandard:reviewer` fixes the judging role, empty skills and denial of built-in writers; dispatch supplies model/effort and the packet. Agent inherits the session cwd, with the written rule forbidding file and remote writes. | Dispatch supplies the contract and packet in an independent one-off checkout of the pinned head, with `workspace-write`, network and a grant only to the copy's Git metadata. | Same pinned one-off checkout and contract, using host/tool permissions and noninteractive `acceptEdits`, with built-in writers denied. | The same pinned one-off checkout and judging contract, with bypass permissions; read-only toward the repository and remote by contract. Every configured and enabled MCP server is callable. | A verdict naming the reviewer and reviewed head, published whole by the caller; the reviewer never changes the repository or its remote. |
 
 The Claude carriers are the whole shipped set of agent definitions, `agents/worker.md` and
 `agents/reviewer.md`. `agents/worker.md` is hand-authored frontmatter plus a body generated from two
@@ -153,9 +154,9 @@ fresh review. It never receives merge authority (PRD §1.2, §2.2).
 
 Static role content has one operative source per role: the orchestrator role reference, the worker
 role reference, and `reference/code-review-prompt.md` for the reviewer. The worker's is a contract
-only; the mechanics of its host come from one page per executor family, `reference/harness-claude.md`
-or `reference/harness-codex.md`'s worker-facing section, and a worker is delivered its own and never
-the other's (ADR 0061). Agent definitions and
+only; its mechanics come from one page per executor family: `reference/harness-claude.md`, or the
+worker-facing section of `reference/harness-codex.md` or `reference/harness-antigravity.md`. A worker
+is delivered its own family's page (ADR 0061, ADR 0066). Agent definitions and
 dispatch prompts are delivery carriers, not independently edited copies. Each role page is
 self-contained: it carries the shared workflow contract, triggers and pointers together with that
 role's own operations, so a role reads one page and never the other role's (ADR 0059) — plus, for a
@@ -292,7 +293,7 @@ handler must be short, and any long wait belongs to an observable harness task i
 it does not attempt to. A hook that reads command text is not complete enforcement — obfuscation, an
 interpreter script and an operation built from runtime data all pass it — so the role hook guards the
 ordinary case and the layers that carry the guarantee are `guard merge`'s reviewed-head verification,
-branch protection and, for Codex CLI, the OS sandbox. Claude-native and Claude CLI workers retain
+branch protection and, for Codex CLI, the OS sandbox. Claude-native, Claude CLI and Antigravity workers retain
 host/tool permissions: their assigned-worktree and named-branch boundaries are structural role obligations.
 A CLI worker's shared git metadata access also does not enforce its named-branch boundary.
 
@@ -335,8 +336,9 @@ no record of it ever firing having appeared.
 
 The lane persists and the worker is disposable. A goal-fix round sends a continuation brief into
 the same branch, worktree, and PR, carrying only the blocking goal gaps, the PR, and the issue. A
-native executor may continue through the same handle with `--resume` or through a fresh one; both
-CLI implementations use a fresh process. A native handle is the caller's own and the dispatcher
+native executor may continue through the same handle with `--resume` or through a fresh one. CLI
+implementations use a fresh process; agy workers resume their recorded same-lane conversation. A
+native handle is the caller's own and the dispatcher
 observes none, so the handle recorded on the issue is the evidence its child finished. CLI
 continuation follows the prior background task's exit; one orchestrator owns one executor per lane.
 
@@ -643,3 +645,11 @@ running consumes no returned round. The harness's native background-task exit no
 the wakeup for both completion and silent executor death. Claude Code session death abandons the
 run. The issue-side run receipt and output/log paths remain; process exit is not task acceptance.
 `reference/orchestrator.md`'s Dispatching to an executor section owns the invocation convention.
+
+**Antigravity executor (2026-10-18, #519, ADR 0066).** agy follows the child-process lifetime and
+fresh reviewer checkout paths above. Its worker and reviewer use host permissions with
+`--dangerously-skip-permissions`; role scope and read-only review authority are contractual. The
+operator owns configured MCP access. The marked `reference/harness-antigravity.md` section carries
+worker mechanics. Full briefs arrive over stream-json stdin, final responses and conversation IDs
+are retained, and denials or unsuccessful results fail the harness. Arbitration selects agy first,
+then Codex and Claude under `reference/orchestrator.md`'s Model and effort section.

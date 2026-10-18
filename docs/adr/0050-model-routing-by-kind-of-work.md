@@ -1,6 +1,6 @@
 # 0050 — Route model and effort by kind of work, without a tier cap
 
-Status: Accepted (2026-09-09). Amends 0024 (the tier cap and mechanical-only downgrade rule) and 0040 (its restatement of the cap and uniform routing); amends 0008, 0036, 0039 and 0047 (their routing statements). Amended by 0056 (2026-09-11). Amended (2026-09-19). Amended (2026-09-20). Amended (2026-09-21). Amended (2026-09-23). Amended (2026-09-29). Amended by 0064 (2026-10-04).
+Status: Accepted (2026-09-09). Amends 0024 (the tier cap and mechanical-only downgrade rule) and 0040 (its restatement of the cap and uniform routing); amends 0008, 0036, 0039 and 0047 (their routing statements). Amended by 0056 (2026-09-11). Amended (2026-09-19). Amended (2026-09-20). Amended (2026-09-21). Amended (2026-09-23). Amended (2026-09-29). Amended by 0064 (2026-10-04). Amended by 0066 (2026-10-18).
 
 ## Context
 
@@ -159,3 +159,5 @@ now consumes that closing-default row, retaining refusal when it is missing or a
 Arbitration keeps Codex `gpt-6-astra` at `max`, with built-in Claude `fable` at `max` as its quota
 fallback, not another tier; the old block's "`fable` is named nowhere live" no longer holds.
 `reference/orchestrator.md`'s **Model and effort** section remains the one live record.
+
+**Amendment (2026-10-18, see 0066):** Arbitration now defaults to Antigravity `gemini-4-argon` at `high`, then Codex `gpt-6-astra` at `max`, then Claude `fable` at `max`. Codex remains the default dispatched worker/reviewer. The operative role table and arbitration order remain in `reference/orchestrator.md`.

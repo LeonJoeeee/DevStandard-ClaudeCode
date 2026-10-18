@@ -108,7 +108,7 @@ jobs:
           import re
           page="reference/orchestrator.md"
           t=open(page).read()
-          rows=re.findall(r"^\| (worker|reviewer) \| `([^`|]+)` at `([^`|]+)` \| `([^`|]+)` at `([^`|]+)` \|$", t, re.M)
+          rows=re.findall(r"^\| (worker|reviewer) \| `([^`|]+)` at `([^`|]+)` \| `([^`|]+)` at `([^`|]+)` \| `([^`|]+)` at `([^`|]+)` \|$", t, re.M)
           assert [r[0] for r in rows]==["worker","reviewer"], f"anchored rows: want one machine-readable row per role, got {rows}"
           print("anchored settings: one machine-readable row per role")
           PY

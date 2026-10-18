@@ -83,7 +83,7 @@ for name, source in ROLES.items():
     assert metadata.get("model") == "opus", f"{name}: model must use the opus tier alias"
     if name == "worker":
         claude_effort = re.search(
-            r'^\| worker \| `[^`]+` at `[^`]+` \| `[^`]+` at `([^`]+)` \|$',
+            r'^\| worker \| `[^`]+` at `[^`]+` \| `[^`]+` at `([^`]+)` \|(?:[^\n]*\|)?$',
             (ROOT / 'reference/orchestrator.md').read_text(), re.M)
         assert claude_effort and metadata.get("effort") == claude_effort[1], \
             "worker: effort must match the Claude cell in orchestrator.md's Model and effort table"

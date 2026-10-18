@@ -1,6 +1,6 @@
 # 0064 — Codex is the default executor for the anchored roles; the method names Codex models and Claude tier aliases, never a cross-harness pairing
 
-Status: Accepted (2026-10-04). Amends 0050 (its 2026-09-29 block's anchors, tier-equivalence basis, helper routing and arbitration fallback) and 0040 (its 2026-09-11 block's reversal of the executor preference). Also amends 0009, 0011, 0036, 0047 and 0060 (their live dispatch-default statements). Amended (2026-10-07).
+Status: Accepted (2026-10-04). Amends 0050 (its 2026-09-29 block's anchors, tier-equivalence basis, helper routing and arbitration fallback) and 0040 (its 2026-09-11 block's reversal of the executor preference). Also amends 0009, 0011, 0036, 0047 and 0060 (their live dispatch-default statements). Amended (2026-10-07). Amended by 0066 (2026-10-18).
 
 **Scope: this ADR decides what the method ships.** It changes which executor is primary and what the pages assert about models.
 
@@ -82,3 +82,5 @@ anchored settings, executor preference, helper routing and arbitration decision 
 
 `reference/code-review-prompt.md` carries the repository/remote rule; `reference/orchestrator.md`'s
 Dispatching to an executor section and `reference/harness-codex.md` carry the environment mechanics.
+
+**Amendment (2026-10-18, see 0066):** Antigravity is added as an explicit worker/reviewer executor with its own anchors. Arbitration now uses Antigravity `gemini-4-argon` at `high` first, followed by Codex `gpt-6-astra` at `max` and Claude `fable` at `max`. The Codex dispatch default and existing Codex/Claude settings stand.

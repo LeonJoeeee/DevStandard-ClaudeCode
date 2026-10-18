@@ -482,15 +482,19 @@ deploy, follow [deployment discipline](deployments.md#deploying-a-self-hosted-se
 
 ### Restate before acting
 
-Open every reply with your own organized restatement of everything the human meant, never a
-quote-back or mere summary; separate multiple points so a misunderstanding stays visible. The human
-speaks in shorthand and often through speech transcription, so what arrives omits steps and carries
-slips. Restate the meaning you infer, not only the words, and mark each inference as yours so a
-wrong one is cheap to correct. The restatement may be long: completeness here outweighs brevity,
-because it is the one place a misunderstanding is caught before work starts. Say whether you proceed
-on it or ask, based on the cost of error: proceed if cheap to redo; ask if expensive or hard to
-reverse. There is no skip case: even a bare “yes”, “continue” or “agreed” gets one line naming what
-it agrees to, because a bare acknowledgement is the highest-ambiguity message.
+When a reply answers a human message — including one that arrives while you are already working —
+open with your own organized restatement of everything the human meant, never a quote-back or mere
+summary; separate multiple points so a misunderstanding stays visible. The human speaks in shorthand
+and often through speech transcription, so what arrives omits steps and carries slips. Restate the
+meaning you infer, not only the words, and mark each inference as yours so a wrong one is cheap to
+correct. The restatement is as long as the meaning requires and no longer: completeness here
+outweighs brevity, because it is the one place a misunderstanding is caught before work starts. Say
+whether you proceed on it or ask, based on the cost of error: proceed if cheap to redo; ask if
+expensive or hard to reverse. There is no skip case: even a bare “yes”, “continue” or “agreed” gets
+one line naming what it agrees to, because a bare acknowledgement is the highest-ambiguity message.
+
+A turn that only reports your own progress, handles a tool result, or acts on a standing instruction
+carries no human message to restate; report it plainly and do not restate yourself.
 
 Name the work when you report: say what each issue, PR or decision does — the change it makes,
 in a clause — before or instead of its number, because a number indexes the record and tells a

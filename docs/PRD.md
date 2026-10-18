@@ -157,11 +157,12 @@ building blocks:
 - **skills** — mature methods invoked at the matching workflow step;
 - **native subagents** — Claude role definitions deliver the task and explicit model settings;
   host support determines tool and permission controls;
-- **external agent processes** — the Claude Code main session can invoke the Codex or Claude CLI
+- **external agent processes** — the Claude Code main session can invoke the Codex, Claude or Antigravity CLI
   for worker duty, with the role in the dispatch prompt and independently managed process
   lifetime. Codex CLI supplies an OS-enforced role sandbox and can serve as a gating reviewer;
   Claude CLI workers use host/tool permissions and their assigned worktree, without claiming the
-  same sandbox;
+  same sandbox. Antigravity uses host permissions with `--dangerously-skip-permissions`; all CLI
+  reviewers use a disposable pinned checkout and are read-only toward the repository and remote;
 - **scripts** — mechanical steps (dispatch, review-packet assembly) made fixed;
 - and **hybrids** of the above.
 

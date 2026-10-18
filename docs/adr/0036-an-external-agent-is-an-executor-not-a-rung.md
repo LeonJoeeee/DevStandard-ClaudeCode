@@ -2,7 +2,7 @@
 
 Status: Amended by 0050 (2026-09-09). Accepted (2026-08-25). Amended by 0045 (2026-09-05). Amended by 0038 (2026-08-26). Amended by 0040 (2026-08-26). Amended by 0047 (2026-09-07). Amended (2026-09-07). Amended (2026-09-11). Extends 0008 (the ladder's executors; the rungs, run sizing and
 rationing are unchanged). Cites 0024 without amending it: the cap and the tier names stand for every
-agent this method spawns through its own harness, and do not reach a process it does not spawn. Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04). Amended (2026-10-07).
+agent this method spawns through its own harness, and do not reach a process it does not spawn. Amended by 0056 (2026-09-11). Amended by 0063 (2026-09-29). Amended by 0064 (2026-10-04). Amended (2026-10-07). Amended by 0066 (2026-10-18).
 
 ## Context
 
@@ -180,3 +180,5 @@ changes, with disposable experiments confined to the copy and verdict publicatio
 caller. Native Claude retains the session cwd, the written no-file-write rule and built-in writer
 denial. Worker sandbox/grants, the no-bypass rule and the reviewer `gh api` write-flag hook remain.
 The unavailable-executor fallback still preserves the judging contract and never lowers it.
+
+**Amendment (2026-10-18, see 0066):** The blanket no-bypass rule is retired. Permission posture belongs to each harness page; agy uses `--dangerously-skip-permissions` for workers and reviewers, with reviewer authority unchanged and no MCP admission layer.

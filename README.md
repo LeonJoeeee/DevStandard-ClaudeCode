@@ -20,6 +20,7 @@ The bet behind it: directing agents is the same collaboration problem humans alr
 - **[superpowers](https://github.com/obra/superpowers)** — the craft layer. Install it alongside DevStandard, and into Codex as well if you dispatch Codex lanes (see [Install](#install)): the role pages point to its requirements, debugging, TDD and planning skills, and each executor resolves them from its own host ([ADR 0016](docs/adr/0016-superpowers-becomes-a-dependency.md)).
 - **git**, and a **GitHub repo** for the full flow — the generated CI and release pipelines target GitHub Actions. The discipline itself works with any git hosting.
 - **Python 3.9+ and an authenticated [`gh`](https://cli.github.com/) CLI** for the shipped commands — the dispatcher, review packets and guarded merge use GitHub through `gh`. Codex process lanes support macOS and Linux using Python's detached-session support; Windows is not qualified ([dispatch guide](reference/orchestrator.md)).
+- **For Antigravity lanes:** an authenticated `agy` on PATH, a writable normal host HOME, and worker superpowers skills in that host. See [Antigravity executor](reference/harness-antigravity.md) for login, bypass permissions and MCP responsibility.
 - **For Codex lanes only:** an installed, authenticated Codex CLI with superpowers installed into it, and, on Linux, its [sandbox prerequisites](https://learn.chatgpt.com/docs/sandboxing#prerequisites): the distribution's `bubblewrap` package and, where required, its scoped AppArmor profile.
 
 ## Install
@@ -59,7 +60,7 @@ Codex has enabled runs in a dispatched Codex child ([Codex executor](reference/h
 
 - **Set the result and why** — the orchestrator turns them into issues with bounds and observable done-checks. Document and review weight belongs to each task; a demo earns no automatic setup ceremony.
 - **Keep one responsive orchestrator** — Claude Code discusses, dispatches, accepts and integrates. Direct work stays small enough not to block that conversation; other concrete work goes to a worker.
-- **Run workers in parallel lanes** — one task, branch and worktree each, using Codex CLI by default. Claude Code's native subagents and Claude CLI workers remain explicit choices; a Codex CLI worker runs in an OS sandbox scoped to its lane. Workers implement, rebase, prove the final state and deliver a green PR.
+- **Run workers in parallel lanes** — one task, branch and worktree each, using Codex CLI by default. Claude Code's native subagents, Claude CLI and Antigravity CLI remain explicit choices; a Codex CLI worker runs in an OS sandbox scoped to its lane. Workers implement, rebase, prove the final state and deliver a green PR.
 - **Accept against the goal** — a clean reviewer judges a green PR under the Goal/Floor/Notes contract. Both review and CI guard integration; architecture direction and major releases remain human-owned.
 - **Load the relevant context** — the orchestrator's role reference, which carries the shared workflow with it, arrives at session start; workers receive their own role and execution craft. Other references load at their triggers.
 
@@ -90,15 +91,17 @@ both Claude paths, in the brief on the default Codex path — plus one task pack
 [fixed dispatcher](reference/orchestrator.md). That page is the shared contract; the mechanics of
 the host it is running on come with it, from one page per executor family
 ([Claude](reference/harness-claude.md), or the worker-facing section of
-[the Codex executor page](reference/harness-codex.md)), and a worker is never handed the other's. Those
+[the Codex executor page](reference/harness-codex.md) or
+[Antigravity](reference/harness-antigravity.md)), and a worker is never handed the other's. Those
 pages are self-contained together: the role is complete without the orchestrator page. The reviewer judges under the sole
 [judging contract](reference/code-review-prompt.md), which the review-packet script fills from
 current sources, dispatches, and publishes whole on the PR.
 Superpowers bindings live once per role, with Claude worker frontmatter checked against its source.
-Explicit process paths are `codex` for Codex CLI and `claude-cli` for Claude CLI workers and
-reviewers; `claude` is the native Claude Agent. Workers use their assigned worktree; CLI reviewers
+Explicit process paths are `codex`, `claude-cli` and `agy` for Codex, Claude and Antigravity CLI
+workers and reviewers; `claude` is the native Claude Agent. Workers use their assigned worktree; CLI reviewers
 use an independent disposable checkout of the pinned head. Claude CLI uses host/tool permissions;
-Codex CLI provides its role sandbox, with reviewer `workspace-write` and network. Reviewers are
+Codex CLI provides its role sandbox, with reviewer `workspace-write` and network. Antigravity uses
+`--dangerously-skip-permissions` under host permissions, with no MCP admission layer. Reviewers are
 read-only toward the repository and its remote and return the verdict for caller publication.
 Other templates and procedures in [`reference/`](reference/) load at their triggers. The supported
 configuration and guard limitations are in [the architecture](docs/architecture.md) and

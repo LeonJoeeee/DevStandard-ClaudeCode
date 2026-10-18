@@ -116,9 +116,9 @@ def route_setting(purpose, implementation, model=None, effort=None):
     rows = [[cell.strip() for cell in line.split('|')[1:-1]]
             for line in text.splitlines() if line.startswith('|')]
     matches = [row for row in rows if row and row[0] == purpose]
-    codex = implementation == 'codex'
-    match = (re.fullmatch(r'`([^`]+)` at `([^`]+)`', matches[0][1 if codex else 2])
-             if len(matches) == 1 and len(matches[0]) == 3 else None)
+    column = {'codex': 1, 'claude': 2, 'claude-cli': 2, 'agy': 3}[implementation]
+    match = (re.fullmatch(r'`([^`]+)` at `([^`]+)`', matches[0][column])
+             if len(matches) == 1 and len(matches[0]) > column else None)
     if match is None:
         print(f'dispatch warning: no readable anchored {purpose} row in {page}; '
               'using the explicit --model/--effort instead', file=sys.stderr)
@@ -202,6 +202,59 @@ def reviewer_role(value, identity):
     structured = review_packet.decode(value)
     require(structured is not None, 'reviewer requires structured contract slots; use scripts/review-packet assemble')
     return review_packet.render(structured, identity)
+
+
+def antigravity_worker_mechanics():
+    page = (ROOT / 'reference/harness-antigravity.md').read_text()
+    begin, end = ('<!-- BEGIN ANTIGRAVITY WORKER MECHANICS -->\n',
+                  '<!-- END ANTIGRAVITY WORKER MECHANICS -->\n')
+    require(page.count(begin) == 1 and page.count(end) == 1,
+            'reference/harness-antigravity.md must mark exactly one worker-facing section')
+    block = page.split(begin, 1)[1].split(end, 1)[0].strip('\n')
+    require(block, 'the marked Antigravity worker-facing section is empty')
+    return '\n' + block + '\n'
+
+
+def antigravity_result(events, output):
+    """Keep the final answer separate from the raw stream; no denied action is a success."""
+    final = None
+    denied = []
+
+    def denials(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key == 'denied_actions' and item:
+                    denied.append(item)
+                else:
+                    denials(item)
+        elif isinstance(value, list):
+            for item in value:
+                denials(item)
+
+    # NDJSON is LF-delimited; Unicode separators inside a JSON string are response content.
+    for line in events.read_text().split('\n'):
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError as error:
+            raise Refusal(f'agy returned malformed stream-json: {error}') from error
+        require(isinstance(event, dict), 'agy returned a non-object stream event')
+        denials(event)
+        if event.get('event') == 'result':
+            final = event.get('result')
+    require(isinstance(final, dict), 'agy returned no final result')
+    response = final.get('response')
+    require(isinstance(response, str) and response.strip(), 'agy returned no final response')
+    output.write_text(response)
+    conversation = final.get('conversation_id')
+    require(isinstance(conversation, str) and conversation.strip(), 'agy returned no conversation_id')
+    metadata = dict(conversation_id=conversation, usage=final.get('usage', {}))
+    if denied:
+        metadata['harness_error'] = 'agy returned denied_actions; see the raw stream-json events'
+    elif final.get('status') != 'SUCCESS':
+        metadata['harness_error'] = f'agy final result status: {final.get("status")!r}'
+    return metadata
 
 
 def pinned_evidence(project, packet):
@@ -388,12 +441,24 @@ points here for; that page keeps the decision and the command line).
   changes, accessible evidence, the current role source, and every non-dispatch issue comment in
   order.
 
-  CLI execution. --wait is required for Codex and Claude CLI dispatch. Run this command as a
+  CLI execution. --wait is required for Codex, Claude CLI and Antigravity (agy) dispatch. Run this command as a
   harness background task: dispatch owns the executor child, waits for its exit and returns the
   observed status (128 + signal number for a signal death). The harness notifies on task exit;
   read the returned JSON's executor_exit and the output/log paths, then report. Retain the run
   directory, brief, output and log through lane cleanup. Process exit is not task acceptance.
   Claude Code session death abandons the run.
+
+  Antigravity. agy must be on PATH and authenticated in the host HOME. Dispatch sends the whole
+  brief as one stream-json stdin message, decorates --model as MODEL-EFFORT, and passes
+  --dangerously-skip-permissions. The raw events path preserves all results; output holds the final
+  response. The returned run and completed issue receipt retain conversation_id and usage.
+  Same-lane worker continuation uses --conversation; reviewers always start fresh. A nonzero exit,
+  denied_actions anywhere in the stream, or an invalid/unsuccessful result fails the harness.
+  If only the completed issue receipt could not be posted, dispatch returns the observed run with
+  receipt_error and receipt (the saved comment file), and exits 2. Retry exactly:
+  gh issue comment ISSUE --repo REPO --body-file RECEIPT
+  before continuing that worker. A reviewer return remains available for normal publication.
+  reference/harness-antigravity.md owns login, permission posture and MCP responsibility.
 
   Native receipts. --implementation claude prepares agent-spawn.json, the Agent-tool instruction:
   subagent type, model, effort and the complete prompt. The caller passes it to the Agent tool,
@@ -407,9 +472,9 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('issue', type=int)
     parser.add_argument('--purpose', choices=['worker', 'reviewer'])
-    parser.add_argument('--implementation', choices=['codex', 'claude', 'claude-cli'],
-                        help='codex: Codex CLI process; claude: native Claude Agent; claude-cli: Claude CLI worker/reviewer')
-    parser.add_argument('--model', help="explicit model override; otherwise use the role's anchored row")
+    parser.add_argument('--implementation', choices=['codex', 'claude', 'claude-cli', 'agy'],
+                        help='codex: Codex CLI process; claude: native Claude Agent; claude-cli: Claude CLI worker/reviewer; agy: Antigravity CLI worker/reviewer')
+    parser.add_argument('--model', help="explicit base model override (agy appends effort); otherwise use the role's anchored row")
     parser.add_argument('--effort', help="explicit effort override; otherwise use the role's anchored setting")
     parser.add_argument('--project', type=Path, default=Path.cwd(), help='target checkout, distinct from plugin installation')
     parser.add_argument('--base', help='required named ref or full commit pin for a new lane, normally origin/main; fetch first')
@@ -427,7 +492,7 @@ def main():
     args = parser.parse_args()
     require(args.issue > 0, 'issue must be positive')
     implementation = args.implementation or 'codex'
-    require(not args.wait or (implementation in ('codex', 'claude-cli')
+    require(not args.wait or (implementation in ('codex', 'claude-cli', 'agy')
             and not any((args.adopt, args.cleanup))), '--wait requires CLI dispatch, not native or maintenance actions')
     require(args.adopt or args.cleanup or implementation in NATIVE_IMPLEMENTATIONS or args.wait,
             'CLI dispatch requires --wait; run it as a harness background task')
@@ -530,7 +595,7 @@ def main():
         print(json.dumps(lane, indent=2))
         return
     implementation = args.implementation or 'codex'  # the anchored roles' default executor (#464)
-    require(not args.resume or implementation in NATIVE_IMPLEMENTATIONS, '--resume is only for native workers; CLI executors start fresh')
+    require(not args.resume or implementation in NATIVE_IMPLEMENTATIONS, '--resume is only for native workers; agy continuation uses its recorded conversation')
     if args.continuing or (existing and args.purpose == 'worker'):
         require(not args.continuing or args.brief, '--continue requires --brief')
         # A delivered lane continues through its open PR; without one, the dispatcher says so on
@@ -565,6 +630,7 @@ def main():
         require(extra, 'missing brief')
     model, effort = route_setting(args.purpose, implementation, args.model, args.effort)
     reviewer_identity = (f'Codex, {model} at {effort}, read-only' if implementation == 'codex'
+                         else f'Antigravity, {model} at {effort}, read-only' if implementation == 'agy'
                          else f'Claude {"CLI" if implementation == "claude-cli" else "subagent"}, {model} at {effort}, read-only')
     review_head = None
     if args.purpose == 'reviewer':
@@ -580,13 +646,16 @@ def main():
         # One contract for every executor: the page carries no template slot, because the packet
         # already carries the issue, branch, worktree and done-check it used to duplicate, and a
         # static Claude agent definition cannot fill one (#402, ADR 0060). What differs per
-        # executor is harness mechanics, and only Codex needs them carried here: the Claude
+        # executor is harness mechanics. Codex and agy carry them here; the Claude
         # definition body already delivers `reference/harness-claude.md` on both Claude paths
         # (ADR 0061).
         role = (ROOT / 'reference/worker.md').read_text()
         if implementation == 'codex':
             role += codex_worker_mechanics()
-    identity = f'Codex {model} {effort}' if implementation == 'codex' else f'Claude {model} {effort}'
+        elif implementation == 'agy':
+            role += antigravity_worker_mechanics()
+    family = {'codex': 'Codex', 'agy': 'Antigravity'}.get(implementation, 'Claude')
+    identity = f'{family} {model} {effort}'
     packet = f"\n\n# Task packet\nIssue: {issue['url']}\nBranch: {lane['branch']}\nWorktree: {wt}\nNamed base: {lane['base']} ({lane['base_sha']})\nRole references resolve from: {ROOT}\n\n{worker_issue(issue)}\n"
     if pr:
         packet += f"PR: {pr['url']}\n"
@@ -594,7 +663,7 @@ def main():
         packet += ('\n## Continuation brief\n' if args.continuing else '\n## Inputs and expected output\n') + extra + '\n'
     packet += f'\nExecutor: {identity}. Record language: English.\n'
     if args.purpose == 'worker':
-        email = 'noreply@openai.com' if implementation == 'codex' else 'noreply@anthropic.com'
+        email = {'codex': 'noreply@openai.com', 'agy': 'noreply@google.com'}.get(implementation, 'noreply@anthropic.com')
         packet += f'Commit trailer: Co-Authored-By: {identity} <{email}>\nReturn the PR and evidence to the caller; never merge.\n'
         if implementation == 'claude-cli':
             packet += ('Permission policy: Claude acceptEdits with permission prompts disabled, under host permissions. '
@@ -611,6 +680,15 @@ def main():
         require(shutil.which('claude'), 'claude is not installed')
         require((ROOT / '.claude-plugin/plugin.json').is_file(), 'Claude plugin manifest is missing')
         require((ROOT / 'hooks/hooks.json').is_file(), 'Claude plugin hooks are missing')
+    conversation = None
+    if implementation == 'agy':
+        require(shutil.which('agy'), 'agy is not installed')
+        if args.purpose == 'worker' and existing:
+            prior = [r for r in history if r.get('kind') == 'run' and r.get('purpose') == 'worker'
+                     and r.get('lane_id') == lane['lane_id']]
+            if prior and prior[-1].get('implementation') == 'agy':
+                conversation = prior[-1].get('conversation_id')
+                require(conversation, 'prior agy worker has no recorded conversation_id; return the incomplete run')
     if implementation in ('codex', 'claude-cli'):
         require((ROOT / 'hooks/pre-tool-use').is_file(), 'repository role hook is missing')
     rebase_continuation = False
@@ -630,7 +708,7 @@ def main():
     # The role rides the agent definition body on BOTH Claude paths — the native `claude`
     # subagent (#332) and `claude-cli`, which launches `--agent devstandard:worker` below — so
     # the brief carries the packet alone there and the page arrives exactly once (#411). It rides
-    # the brief only where no definition can carry it: `codex`, and a Claude reviewer, whose judging contract is assembled per review rather than installed.
+    # the brief only where no definition can carry it: `codex`, `agy`, and a Claude reviewer, whose judging contract is assembled per review rather than installed.
     definition_carries_role = (implementation in ('claude', 'claude-cli')
                                and args.purpose == 'worker')
     prompt = packet if definition_carries_role else role + packet
@@ -675,7 +753,18 @@ def main():
     else:
         output = scratch / ('output.jsonl' if implementation == 'claude-cli' else 'output.txt')
         log = scratch / 'process.log'
-        if implementation == 'claude-cli':
+        if implementation == 'agy':
+            stdin = scratch / 'input.jsonl'
+            stdin.write_text(json.dumps(dict(event='user', message=dict(content=prompt))) + '\n')
+            events = scratch / 'events.jsonl'
+            argv = [shutil.which('agy'), '--input-format', 'stream-json', '--output-format', 'stream-json',
+                    '--model', f'{model}-{effort}', '--dangerously-skip-permissions']
+            if conversation:
+                argv += ['--conversation', conversation]
+            command = dict(argv=argv, cwd=str(cwd), stdin=str(stdin), stdout=str(events))
+            record.update(permission_mode='always-proceed', sandbox='host', output_format='stream-json',
+                          events=str(events))
+        elif implementation == 'claude-cli':
             command = dict(argv=[shutil.which('claude'), '--print', '--plugin-dir', str(ROOT),
                 '--agent', f'devstandard:{args.purpose}', '--permission-mode', 'acceptEdits', '--permission-prompts', 'none',
                 '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--model', model, '--effort', effort],
@@ -722,8 +811,22 @@ def main():
         # Publish the binding before the child starts: a worker recovers its packet from this run.
         publish(project, repo, args.issue, record, scratch)
         record['executor_exit'] = execute(command, log, args.purpose)
+        if implementation == 'agy':
+            try:
+                record.update(antigravity_result(events, output))
+            except (Refusal, OSError) as error:
+                record['harness_error'] = str(error)
+            record['status'] = 'returned'
+            # The completed receipt makes the conversation available to the next same-lane run.
+            try:
+                publish(project, repo, args.issue, record, scratch)
+            except Refusal as error:
+                # The observed result must survive a coordination write failure. The saved
+                # complete receipt can be published by the caller before worker continuation.
+                record.update(receipt_error=str(error), receipt=str(scratch / 'comment.md'))
     print(json.dumps(record, indent=2))
-    code = record.get('executor_exit', 0)
+    code = (record.get('executor_exit', 0) or (1 if record.get('harness_error') else 0)
+            or (2 if record.get('receipt_error') else 0))
     return code if code >= 0 else 128 - code
 
 

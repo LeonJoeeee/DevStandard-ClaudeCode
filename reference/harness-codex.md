@@ -7,15 +7,15 @@ installed plugin root. The marked section below is the part `scripts/dispatch` h
 
 ## Dispatching Codex
 
-Dispatch a worker with `scripts/dispatch ... --implementation codex`, and commission a gating review
-through `scripts/review-packet start ... --implementation codex`, which uses the fresh
+Dispatch a worker with `scripts/dispatch ... --implementation codex --wait`, and commission a gating review
+through `scripts/review-packet start ... --implementation codex --wait`, which uses the fresh
 Codex CLI process and whole-verdict publication path. The CLI must be installed and authenticated,
 and a worker needs superpowers installed into Codex: its craft bindings name superpowers skills, and
 Codex resolves skills from its own roots, never from Claude Code's (`README.md`'s Install section).
 `reference/orchestrator.md`'s Dispatching to an executor section owns when Codex is chosen and its
 permission boundaries.
 
-**Verified Codex mechanics.** Run Codex CLI in the foreground of its detached supervisor. A linked
+**Verified Codex mechanics.** Run Codex CLI as the dispatch process's child with `--wait`. A linked
 worktree needs write grants to both the common `.git` directory and its `.git/worktrees/<name>`
 directory; the first grant is not recursive. Codex's `review` subcommand cannot take this contract
 and its sandbox controls, so gating review uses plain `exec`. Inspect actual output shape,
@@ -25,11 +25,10 @@ claims about another tool.
 A CLI reviewer runs with `workspace-write` and network in a one-off checkout of the packet's
 pinned head, under its run scratch (`TMPDIR` or the system temporary directory). Its Git metadata
 lives beside that checkout; the only extra write grant is to that copy's metadata, so fetching
-history cannot alter the lane's refs or objects. The supervisor creates the independent clone,
-restores the upstream origin, and removes the copy before recording completion, including a
-nonzero exit or handled cancellation. Creation failure records `launch-failure` and launches no
-reviewer; it never falls back to the lane. A killed/lost supervisor requires the existing exact-run
-recovery; its known disposable copy may remain for caller cleanup.
+history cannot alter the lane's refs or objects. The dispatch process creates the independent clone,
+restores the upstream origin, and removes the copy before returning, including a
+nonzero exit or handled cancellation. Creation failure returns an error and launches no
+reviewer; it never falls back to the lane.
 
 Read-only describes authority toward the repository and its remote: the reviewer never comments,
 edits a PR or issue, pushes, or changes remote state. Disposable experiments stay in the copy and
@@ -45,10 +44,10 @@ The hook-trust bypass dispatch passes is invocation-wide, so every hook source C
 runs in the child. A DevStandard Codex plugin left installed from a release before 2.0.0 is one such
 source: remove it with `codex plugin remove`.
 
-For a Codex CLI run's liveness, lost-run recovery and `--wait` semantics, use
+For a Codex CLI run's `--wait` semantics and output paths, use
 `scripts/dispatch --help` and `reference/orchestrator.md`'s Dispatching to an executor section.
-Preserve lifecycle scratch until lane cleanup and read the returned output itself.
-Python supervision supports macOS/Linux; Windows is not qualified.
+Preserve run scratch until lane cleanup and read the returned output itself.
+Python dispatch supports macOS/Linux; Windows is not qualified.
 
 <!-- BEGIN CODEX WORKER MECHANICS -->
 ## Worker mechanics

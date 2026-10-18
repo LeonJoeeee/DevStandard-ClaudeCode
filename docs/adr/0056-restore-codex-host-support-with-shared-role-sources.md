@@ -3,7 +3,7 @@
 Status: Superseded by 0063 (2026-09-29). Originally Accepted (2026-09-11). Supersedes 0045. Amended (2026-09-11). Amended (2026-09-12). Amended (2026-09-20).
 Amended by 0061 (2026-09-19).
 Amends 0006, 0007, 0008, 0011, 0015, 0016,
-0018, 0019, 0022, 0024, 0035, 0036, 0038, 0039, 0040, 0046, 0047, 0049, 0050, 0051 and 0052 (their live host, delivery, routing, version-exemption or sandbox clauses).
+0018, 0019, 0022, 0024, 0035, 0036, 0038, 0039, 0040, 0046, 0047, 0049, 0050, 0051 and 0052 (their live host, delivery, routing, version-exemption or sandbox clauses). Amended by 0065 (2026-10-18).
 
 **Scope: this ADR decides what the method ships.** Both Claude Code and Codex can host the
 orchestrator; their shared workflow and the worker/reviewer contracts remain the same.
@@ -167,3 +167,12 @@ land — another repository, and a main checkout rather than a linked worktree. 
 no longer refuses a closed issue, recording `issue_state` on the run instead, and no longer searches
 a `--brief` for placeholder tokens. `reference/orchestrator.md` and `scripts/dispatch --help` carry
 the operative wordings.
+
+**Amendment (2026-10-18, see 0065):** CLI dispatch requires `--wait` and owns the executor child
+in-process. The harness's native background-task exit notification wakes the orchestrator on normal
+completion or silent executor death; Codex review start publishes the whole verdict before it
+returns. Session death abandons the run. The detached supervisor, lifecycle markers, watcher,
+advisory lock and lost-run reconciliation described above are retired. Dispatch now owns reviewer
+copy creation/removal before returning. Keep the issue run receipt and output/log paths through lane
+cleanup; process exit is not task acceptance. `reference/orchestrator.md` owns the invocation
+convention, and `reference/harness-codex.md` carries the Codex mechanics.

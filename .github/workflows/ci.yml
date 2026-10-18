@@ -246,7 +246,7 @@ jobs:
           root = Path(os.environ['RUNNER_TEMP']) / 'devstandard-claude-runtime'
           for path in sorted(root.glob('*')):
               if path.is_file() and path.name.endswith(('.stdout.jsonl', '.stderr.log',
-                  'summary.json', 'dispatch-cli.process.log', 'dispatch-cli.output.jsonl', 'dispatch-cli.exit-code')):
+                  'summary.json', 'dispatch-cli.process.log', 'dispatch-cli.output.jsonl', 'dispatch-cli.record.json')):
                   print(f'--- {path.name} ---')
                   print(path.read_text()[-20000:])
           PY

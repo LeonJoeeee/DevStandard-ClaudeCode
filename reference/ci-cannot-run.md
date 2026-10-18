@@ -62,7 +62,7 @@ Run every job CI would have run from that worktree, unfiltered and to completion
 **Post this with it.** The reviewer is a clean context with repository and network reads. The
 checklist still travels with the evidence so the audit's required context does not depend on a
 later file or link — in the same PR comment as the `CI-FALLBACK` block below. Commission the review
-with `scripts/review-packet start --ci-fallback <that comment's URL>`, and the assembler carries
+with `scripts/review-packet start --wait --ci-fallback <that comment's URL>`, and the assembler carries
 the whole comment into the CI-fallback placeholder of `reference/code-review-prompt.md`, which
 otherwise reads `NONE`:
 

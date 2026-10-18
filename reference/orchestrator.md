@@ -64,14 +64,11 @@ work or waits that would block that conversation belong in observable lanes. Use
 task state while retaining other verifiable evidence. Prioritize irreversible-action requests and a
 red default branch.
 
-Before ending a turn with work outstanding, arrange what will wake you: watch the thing you are
-waiting for or schedule a timed return. Never rely on remembering to look. A finished but unattended
-lane otherwise looks exactly like one still running.
-
-For a dispatched CLI run, watch the run record's `completion` (`exit-code`) and `launch_failure`
-(`launch-failure`) file paths in a background invocation so the harness re-invokes you on exit, with
-a timeout that ends the invocation if neither sentinel arrives. Keep a timed return for waits with
-no observable completion.
+Run `dispatch ... --wait` and `review-packet start ... --wait` as harness background tasks.
+The dispatch process owns the executor child; review start publishes the whole verdict before
+returning. The harness's native task-exit notification wakes you on completion or silent executor
+death: read the returned output and report. Process exit is not task acceptance. If the Claude Code
+session dies, the run is abandoned.
 
 | Event | Next action |
 |---|---|
@@ -187,9 +184,9 @@ the orchestrator, not in a project file. The default is `--implementation codex`
 CLI process, `--implementation codex`, for a worker or an independent read-only gating reviewer
 under `reference/harness-codex.md`. Claude CLI supports workers and reviewers with host/tool
 permissions. CLI reviewers run in an independent one-off checkout of the pinned head; Codex uses
-`workspace-write` with network and a grant only to the copy's Git metadata. The supervisor owns
-creation and removal in run scratch, refuses setup failure without launching, and retains lifecycle
-evidence. A lost supervisor's known copy is disposed of through the existing recovery and cleanup.
+`workspace-write` with network and a grant only to the copy's Git metadata. The dispatch process owns
+creation and removal in run scratch, including nonzero exits and handled cancellation; setup
+failure launches no reviewer.
 Native Claude review keeps the session directory (Agent has no per-spawn cwd), with the written
 rule forbidding file writes there. All reviewers are read-only toward the repository and its remote:
 no comments, PR or issue edits, pushes, or remote state changes; the caller publishes the verdict.
@@ -229,7 +226,7 @@ an irreversible judgment, an architecture-level acceptance — takes Codex `gpt-
 read-only from this session. It informs the decision and does not make it: a genuine dilemma or
 irreversible judgment still goes to the human (the stuck-work ladder below). With a PR, commission
 it through the Codex reviewer path:
-`review-packet start --implementation codex --model gpt-6-astra --effort max`. Before a PR exists,
+`review-packet start --implementation codex --model gpt-6-astra --effort max --wait`. Before a PR exists,
 run a fresh, history-free Codex process from the checkout with the question and its evidence on
 stdin, and post the captured answer on the issue as the durable record:
 
@@ -272,38 +269,27 @@ undefined effort inherits the session's. A project's `CLAUDE.md`, the issue, or 
 #### Fixed dispatcher
 
 ```sh
-<plugin>/scripts/dispatch 123 --purpose worker --base origin/main
-<plugin>/scripts/dispatch 123 --purpose worker --continue --brief <continuation-file>
-<plugin>/scripts/dispatch 123 --purpose worker --continue --pr 124 --brief <continuation-file>
+<plugin>/scripts/dispatch 123 --purpose worker --base origin/main --wait
+<plugin>/scripts/dispatch 123 --purpose worker --continue --brief <continuation-file> --wait
+<plugin>/scripts/dispatch 123 --purpose worker --continue --pr 124 --brief <continuation-file> --wait
 <plugin>/scripts/dispatch 123 --adopt --base origin/main --branch <existing-branch> --worktree <existing-worktree> --pr 124
-<plugin>/scripts/dispatch 123 --purpose reviewer --packet <complete-review-packet>
+<plugin>/scripts/dispatch 123 --purpose reviewer --packet <complete-review-packet> --wait
 <plugin>/scripts/dispatch 123 --cleanup --pr 124
 # Codex CLI worker
-<plugin>/scripts/dispatch 123 --purpose worker --base origin/main --implementation codex
+<plugin>/scripts/dispatch 123 --purpose worker --base origin/main --implementation codex --wait
 ```
 
 Fetch the named base first. For lane identities and continuation flags, use
 `scripts/dispatch --help`.
 
-For a process executor inside a bounded tool invocation, use `--wait` and keep that same invocation
-alive until it returns. For CLI run state and retention, use `scripts/dispatch --help`.
-Read the returned output itself.
-
-Reconcile a lost run explicitly, on originating-host inspection and durable evidence whose
-preconditions `--help` states:
-
-```sh
-<plugin>/scripts/dispatch 123 --reconcile-lost /exact/recorded/scratch/brief.txt --reason 'Originating-host inspection and result' --evidence https://github.com/owner/repo/issues/123#issuecomment-ID
-```
-
-It resolves one CLI run without inventing an exit or output. If inspection is unavailable, remain
-blocked. A live or uncertain executor never permits a second writer or cleanup.
+For CLI execution and output retention, use `scripts/dispatch --help`.
 
 Native dispatch prepares a receipt, not a running worker: an Agent-tool instruction whose fields
 `--help` carries. Pass it to the Agent tool and record the returned handle; `--resume HANDLE`
 reaches that same finished child, and a missing handle means a fresh executor, never an invented
 one. The dispatcher observes no native handle, so record each returned handle on the issue: that
-record is the evidence one finished, and no flag attests it. A live CLI run still blocks reuse.
+record is the evidence one finished, and no flag attests it. Start the next CLI executor only after
+the prior background task exits.
 
 #### What it returns
 
@@ -341,15 +327,15 @@ alone defines judging: Goal and both Floors decide readiness. Record failed atte
 
 ```sh
 <plugin>/scripts/review-packet assemble 124 --issue 123 --architecture-level no --output <session-scratch>
-<plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch>
+<plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --wait
 # Codex CLI reviewer
-<plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --implementation codex
+<plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --implementation codex --wait
 <plugin>/scripts/review-packet status 124 --issue 123
 # Claude reviewer, after invoking the returned Agent instruction
 <plugin>/scripts/review-packet publish 124 --issue 123 --attempt <comment-id> --verdict <verdict-file>
 <plugin>/scripts/review-packet fail 124 --issue 123 --attempt <comment-id> --reason '<why no reviewer launched>'
 # Ordinary fix round: its reason is recorded with the reservation
-<plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --reason '<blocking goal gap or missing evidence>'
+<plugin>/scripts/review-packet start 124 --issue 123 --architecture-level no --output <session-scratch> --reason '<blocking goal gap or missing evidence>' --wait
 # Floor-2 correction: an explicit ruling must precede continuation and full review
 <plugin>/scripts/review-packet rule 124 --issue 123 --decision continue --reason '<why this correction restores the existing task boundary>'
 ```
@@ -391,11 +377,11 @@ human-touchpoint rulings require durable human authorization. Legacy headings an
 numbering warn; the latest published whole verdict still decides.
 There is no spend field or per-dispatch approval.
 
-A reservation may be marked failed where no reviewer verdict can exist: its start stopped before
-dispatch, or its run was reconciled lost and retained no output. Publication releases every other
-attempt, including one whose supervisor recorded that it never started the executor. On restart use
-`status`, which names the command for the reservation in hand; recover publication from retained
-output rather than launching another reviewer.
+Codex `start --wait` records a failed attempt if the reviewer exits without a verdict.
+A reservation whose start stopped before dispatch can be failed with `--reason`.
+After an observed return, retry a publication error with `publish --attempt ID` using the retained
+output. If the return itself could not be recorded, supply start's captured failure stdout with
+`--dispatch-return FILE`; never launch another reviewer to replace that return.
 
 #### Two narrow exceptions to re-running check 1
 

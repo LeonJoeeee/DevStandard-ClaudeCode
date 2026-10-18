@@ -15,11 +15,9 @@ import os
 from pathlib import Path
 import runpy
 import shutil
-import signal
 import subprocess
 import tempfile
 import threading
-import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -429,7 +427,7 @@ def runtime(binary, fixture_dir, log_dir, role):
 
 
 def dispatch_cli(binary, log_dir, native_background=False, purpose="worker"):
-    """Run the real dispatcher/supervisor/Claude chain; only GitHub is simulated.
+    """Run the real dispatcher/Claude child chain; only GitHub is simulated.
 
     Reuse the command-level tests' real Git fixture and controlled gh executable.
     The Claude wrapper adds this fixture's isolation and local endpoint only; it
@@ -478,24 +476,19 @@ def dispatch_cli(binary, log_dir, native_background=False, purpose="worker"):
                 isolation += ['--allowedTools', 'Agent']
             case.tool('claude', 'import json,os,sys\nfrom pathlib import Path\n'
                 + 'Path(' + repr(str(metadata)) + ').write_text(json.dumps(dict('
-                + 'cwd=os.getcwd(),sid=os.getsid(0),pid=os.getpid(),'
+                + 'cwd=os.getcwd(),sid=os.getsid(0),pid=os.getpid(),ppid=os.getppid(),'
                 + 'role=os.environ.get("DEVSTANDARD_ROLE"),argv=sys.argv[1:])))\n'
                 + 'os.execv(' + repr(binary) + ',[' + repr(binary)
                 + ',*sys.argv[1:],*' + repr(isolation) + '])\n')
             record = (case.call('--purpose', 'reviewer', '--implementation', 'claude-cli',
                                 '--packet', str(case.review_packet(head=pin))) if pin else
                       case.start('--implementation', 'claude-cli'))
-            completion = Path(record['completion'])
-            deadline = time.monotonic() + 45
-            while not completion.exists() and time.monotonic() < deadline:
-                time.sleep(.05)
             (log_dir / (label + '.record.json')).write_text(json.dumps(record, indent=2))
-            for key in ('output', 'log', 'completion', 'brief'):
+            for key in ('output', 'log', 'brief'):
                 path = Path(record[key])
                 if path.exists():
                     shutil.copy2(path, log_dir / (label + '.' + path.name))
-            require(completion.exists(), 'real Claude dispatcher did not finish within 45s')
-            require(completion.read_text().strip() == '0', 'real Claude executor failed')
+            require(record['executor_exit'] == 0, 'real Claude executor failed')
             (log_dir / (label + '.requests.json')).write_text(json.dumps(fixture.requests, indent=2))
             events = [json.loads(line) for line in Path(record['output']).read_text().splitlines()]
             results = [event for event in events if event.get('type') == 'result']
@@ -507,7 +500,7 @@ def dispatch_cli(binary, log_dir, native_background=False, purpose="worker"):
             invocation = json.loads(metadata.read_text())
             shutil.copy2(metadata, log_dir / (label + '.invocation.json'))
             require(invocation['cwd'] == record['review_checkout' if pin else 'worktree'], 'Claude did not use assigned cwd')
-            require(invocation['sid'] == record['pid'], 'Claude did not retain detached supervisor session')
+            require(invocation['ppid'] == record['pid'], 'Claude was not the dispatch process child')
             require(invocation['role'] == purpose, 'dispatcher omitted process role marker')
             content = json.dumps(fixture.requests[0], ensure_ascii=False)
             # Compare the unescaped source in serialized request text by first
@@ -598,16 +591,10 @@ def dispatch_cli(binary, log_dir, native_background=False, purpose="worker"):
             require(all(row.get('output_config', {}).get('effort') == 'max'
                         for row in fixture.requests), 'dispatched effort did not reach model API')
             return {'role': label, 'requests': len(fixture.requests),
-                    'execution': 'real detached Claude CLI', 'result_events': len(results),
+                    'execution': 'real child Claude CLI', 'result_events': len(results),
                     'github': 'fixture', 'full_brief': 'delivered through stdin',
                     'worktree': 'verified', 'jsonl_permission_denials': 'preserved across all result events'}
     finally:
-        if record and not Path(record['completion']).exists():
-            try:
-                if os.getsid(record['pid']) == record['pid']:
-                    os.killpg(record['pid'], signal.SIGTERM)
-            except ProcessLookupError:
-                pass
         case.doCleanups()
 
 

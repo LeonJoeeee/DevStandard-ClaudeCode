@@ -2,7 +2,7 @@
 
 Status: Accepted (2026-09-29). Supersedes 0056. Amends 0006, 0007, 0008, 0011, 0015, 0016, 0018,
 0019, 0022, 0024, 0035, 0036, 0038, 0039, 0040, 0045, 0046, 0047, 0049, 0051, 0052, 0059, 0060 and
-0061 (their live Codex-host, delivery, routing and version-exemption clauses). Amended (2026-10-07).
+0061 (their live Codex-host, delivery, routing and version-exemption clauses). Amended (2026-10-07). Amended by 0065 (2026-10-18).
 
 **Scope: this ADR decides what the method ships.** It removes a supported host.
 
@@ -92,3 +92,12 @@ removal and the two-manifest version predicates are unchanged.
 
 `reference/code-review-prompt.md` carries the repository/remote rule; `reference/orchestrator.md`'s
 Dispatching to an executor section and `reference/harness-codex.md` carry the environment mechanics.
+
+**Amendment (2026-10-18, see 0065):** CLI dispatch requires `--wait` and owns the executor child
+in-process. The harness's native background-task exit notification wakes the orchestrator on normal
+completion or silent executor death; Codex review start publishes the whole verdict before it
+returns. Session death abandons the run. The detached supervisor, lifecycle markers, watcher,
+advisory lock and lost-run reconciliation described above are retired. Dispatch now owns reviewer
+copy creation/removal before returning. Keep the issue run receipt and output/log paths through lane
+cleanup; process exit is not task acceptance. `reference/orchestrator.md` owns the invocation
+convention, and `reference/harness-codex.md` carries the Codex mechanics.

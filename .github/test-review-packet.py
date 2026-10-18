@@ -436,14 +436,12 @@ elif a[0]=='api' and (a[1].endswith('/protection/required_status_checks') or '/i
   print(json.dumps(row))
  else: raise SystemExit('unexpected API: '+endpoint)
 elif a[:1]==['api']:""")
-        gh=gh.replace("a=sys.argv[1:]; c=Path(os.environ['COMMENTS'])", """a=sys.argv[1:]; c=Path(os.environ['COMMENTS'])
-if os.environ.get('WATCH_READY'): Path(os.environ['WATCH_READY']).touch()""")
         (self.d.bin/'gh').write_text(gh)
         self.out=self.root/'assembly'
         self.verdict=self.root/'verdict.txt'
         self.write_verdict()
         # The executor boundary emits a complete verdict; process launch, sandbox selection,
-        # supervision, and publication all remain production code.
+        # child waiting, and publication all remain production code.
         self.env['VERDICT']=str(self.verdict)
         self.d.tool('codex', '''import os,sys,time
 from pathlib import Path
@@ -465,6 +463,9 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
             f'### Notes\n{notes}\nPost this verdict whole on the PR before acting on it.\n')
 
     def invoke(self, action, *args):
+        implementations = [args[i+1] for i, arg in enumerate(args) if arg == '--implementation']
+        if action == 'start' and (not implementations or implementations[-1] == 'codex') and '--wait' not in args:
+            args = (*args, '--wait')
         return subprocess.run([sys.executable,str(self.script),action,'13','--issue','12',
             '--project',str(self.project),*args],env=self.env,text=True,capture_output=True)
 
@@ -515,7 +516,7 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         return record
 
     def test_the_native_attestation_pass_through_is_gone_from_both_scripts(self):
-        """#427: it attested what `alive()` never checked. `start` still reaches its reviewer."""
+        """The retired attestation is refused; native start still reaches its reviewer."""
         for script in (self.script, Path(self.script).with_name('dispatch')):
             with self.subTest(script=script.name):
                 help_text = subprocess.run([sys.executable, str(script), '--help'], env=self.env,
@@ -553,7 +554,7 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
                             spawn = json.loads(Path(result['run']['instruction']).read_text())
                             self.assertEqual((spawn['model'], spawn['effort']), expected)
                         else:
-                            fixture.d.wait_completion(result['run'])
+                            fixture.d.assert_returned(result['run'])
                     finally:
                         fixture.doCleanups()
 
@@ -643,7 +644,7 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.d.comments.write_text('[]')
         self.d.issue.unlink()  # No issue lookup is possible for this PR.
         result = subprocess.run([sys.executable, str(self.script), 'start', '13',
-            '--project', str(self.project)], env=self.env, text=True, capture_output=True)
+            '--project', str(self.project), '--wait'], env=self.env, text=True, capture_output=True)
         return result
 
     def test_bare_bump_start_needs_no_issue_lane_or_reviewer(self):
@@ -673,7 +674,7 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
 
     def test_ordinary_start_still_requires_an_issue(self):
         result = subprocess.run([sys.executable, str(self.script), 'start', '13',
-            '--project', str(self.project)], env=self.env, text=True, capture_output=True)
+            '--project', str(self.project), '--wait'], env=self.env, text=True, capture_output=True)
         self.assertEqual(result.returncode, 2)
         self.assertIn('--issue', result.stderr)
         self.assertEqual(json.loads(self.prcomments.read_text()), [])
@@ -1007,13 +1008,13 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.addCleanup(lambda: process.poll() is None and process.kill())
         record = self.d.await_run(process)
         self.assertIsNone(process.poll())
-        self.assertFalse(Path(record['completion']).exists())
+        self.assertNotIn('completion', record)
         Path(self.env['FAKE_HOLD']).touch()
         stdout, stderr = process.communicate(timeout=12)
         self.assertEqual(process.returncode,0,stderr)
         started = json.loads(stdout)
         self.assertEqual(started['run']['implementation'], 'codex')
-        self.assertEqual(Path(started['run']['completion']).read_text(), '0\n')
+        self.assertEqual(started['run']['executor_exit'], 0)
         rows = json.loads(self.prcomments.read_text())
         self.assertEqual(len(rows),1)
         self.assertTrue(rows[0]['body'].endswith(self.verdict.read_text()))
@@ -1023,6 +1024,67 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         before = self.prcomments.read_text()
         self.call('publish','--attempt',str(started['attempt']))
         self.assertEqual(self.prcomments.read_text(),before)
+
+    def test_start_itself_publishes_only_after_the_reviewer_exits(self):
+        publisher = self.root / 'publisher-pid'
+        self.env.update(FAKE_HOLD=str(self.root / 'executor-release'), PUBLISHER_PID=str(publisher))
+        gh = self.d.bin / 'gh'
+        gh.write_text(gh.read_text().replace(
+            "row['body']=json.loads(Path(a[a.index('--input')+1]).read_text())['body'];write_comments(rows)",
+            "row['body']=json.loads(Path(a[a.index('--input')+1]).read_text())['body']\n  if row['body'].startswith('## Merge check 1') and os.environ.get('PUBLISHER_PID'): Path(os.environ['PUBLISHER_PID']).write_text(str(os.getppid()))\n  write_comments(rows)"))
+        process = subprocess.Popen([sys.executable, str(self.script), 'start', '13', '--issue', '12',
+            '--project', str(self.project), '--architecture-level', 'no', '--output', str(self.out), '--wait'],
+            env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            run = self.d.await_run(process)
+            self.assertIsNone(process.poll())
+            self.assertEqual(self.call('status')['rounds'], 0)
+            self.assertFalse(publisher.exists())
+            self.assertNotIn('completion', run)
+            Path(self.env['FAKE_HOLD']).touch()
+            stdout, stderr = process.communicate(timeout=12)
+            self.assertEqual(process.returncode, 0, stderr)
+            self.assertEqual(int(publisher.read_text()), process.pid)
+            self.assertEqual(json.loads(stdout)['publication']['status'], 'returned')
+            self.assertTrue(json.loads(self.prcomments.read_text())[0]['body'].endswith(self.verdict.read_text()))
+        finally:
+            Path(self.env['FAKE_HOLD']).touch()
+            process.communicate(timeout=12)
+
+    def test_a_reviewer_that_never_returns_stays_pending_until_killed(self):
+        child_pid = self.root / 'reviewer-pid'
+        self.env['REVIEWER_PID'] = str(child_pid)
+        self.d.tool('codex', '''import os,signal,sys
+from pathlib import Path
+if sys.argv[1:3] == ['mcp','list']: print('[]'); raise SystemExit(0)
+Path(os.environ['REVIEWER_PID']).write_text(str(os.getpid()))
+while True: signal.pause()
+''')
+        process = subprocess.Popen([sys.executable, str(self.script), 'start', '13', '--issue', '12',
+            '--project', str(self.project), '--architecture-level', 'no', '--output', str(self.out), '--wait'],
+            env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 8
+            while not child_pid.exists() and process.poll() is None and time.monotonic() < deadline:
+                time.sleep(.02)
+            self.assertTrue(child_pid.exists())
+            status = self.call('status')
+            self.assertEqual((status['next'], status['rounds'], len(status['active'])),
+                             ('awaiting-verdict', 0, 1))
+            self.assertIsNone(process.poll())
+            self.assertNotIn('## Merge check 1', self.prcomments.read_text())
+            os.kill(int(child_pid.read_text()), signal.SIGKILL)
+            stdout, stderr = process.communicate(timeout=12)
+            self.assertEqual(process.returncode, 0, stderr)
+            started = json.loads(stdout)
+            self.assertEqual(started['run']['executor_exit'], -signal.SIGKILL)
+            self.assertEqual(started['publication']['status'], 'failed')
+            status = self.call('status')
+            self.assertEqual((status['rounds'], status['active']), (0, []))
+        finally:
+            if process.poll() is None and child_pid.exists():
+                os.kill(int(child_pid.read_text()), signal.SIGKILL)
+            process.communicate(timeout=12)
 
     def test_wait_rejects_non_start_or_native_review_before_mutation(self):
         for action, options in [('assemble',()), ('start',('--implementation','claude')),
@@ -1040,74 +1102,22 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.d.tool('codex', 'import sys; print("startup failed"); sys.exit(9)')
         started = self.start('--wait')
         self.assertEqual(started['publication']['status'],'failed')
-        self.assertEqual(Path(started['run']['completion']).read_text(),'9\n')
+        self.assertEqual(started['run']['executor_exit'], 9)
         self.assertIn('startup failed',Path(started['run']['log']).read_text())
         self.assertEqual(self.call('status')['rounds'],0)
         self.assertEqual(self.call('status')['active'],[])
 
-    def test_wait_reports_an_executor_that_never_started_instead_of_an_absent_completion(self):
-        """#454: exec failure left `review completion absent` — indistinguishable from a reviewer
-        still out there — so the attempt could only be recovered by hand."""
+    def test_wait_records_an_executor_that_never_started_as_failed(self):
+        """An exec error fails the reserved attempt directly without claiming a reviewer return."""
         (self.d.bin/'codex').write_text('#!/nonexistent/interpreter\n')
         started = self.start('--wait')
         self.assertEqual(started['publication']['status'], 'failed')
         self.assertIn('executor never started', started['publication']['error'])
         self.assertIn('No such file or directory', started['publication']['error'])
-        self.assertFalse(Path(started['run']['completion']).exists())
         status = self.call('status')
         self.assertEqual((status['rounds'], status['active']), (0, []))
         self.assertIn('executor never started', self.prcomments.read_text())
 
-    def test_a_reconciled_lost_run_that_produced_nothing_can_be_failed_and_retried(self):
-        """#454: `--reconcile-lost` released the lane but not the review attempt, so `fail` said
-        'recorded run', `start` said 'already active', and the round could only end by hand."""
-        executor = (self.d.bin/'codex').read_text()
-        self.d.tool('codex', 'import time\ntime.sleep(30)\n')
-        started = self.start()
-        record = started['run']
-        os.killpg(record['pid'], signal.SIGKILL)
-        deadline = time.monotonic()+8
-        while Path(record['supervisor_lock']).exists() and self.call('status')['next'] == 'awaiting-verdict':
-            self.assertLess(time.monotonic(), deadline, 'supervisor did not stop')
-            time.sleep(.05)
-        self.assertFalse(Path(record['output']).exists())
-        self.assertIn('recorded run', self.call('fail', '--attempt', str(started['attempt']),
-                                                '--reason', 'Nothing ran.', ok=False))
-        self.d.call(*self.d.reconcile_options(record))
-        failed = self.call('fail', '--attempt', str(started['attempt']), '--reason',
-                           'Reviewer never returned output; run reconciled lost.')
-        self.assertEqual((failed['status'], failed['round']), ('failed', 1))
-        rows = json.loads(self.prcomments.read_text())
-        self.assertIn('Reviewer never returned output; run reconciled lost.', rows[0]['body'])
-        self.assertIn('Origin host inspection', rows[0]['body'])
-        self.assertNotIn('### Goal verdict', rows[0]['body'])
-        status = self.call('status')
-        self.assertEqual((status['rounds'], status['active']), (0, []))
-        (self.d.bin/'codex').write_text(executor)
-        retried = self.start('--wait')
-        self.assertEqual((retried['round'], retried['publication']['status']), (1, 'returned'))
-
-    def test_a_reconciled_lost_run_that_retained_output_is_still_published_not_failed(self):
-        """The other half of #454: retained output can still become a verdict, so releasing that
-        attempt stays on `publish`, which reads it."""
-        self.env['FAKE_HOLD'] = str(self.root/'executor-release')
-        started = self.start()
-        record = self.d.await_run()
-        os.killpg(record['pid'], signal.SIGKILL)
-        time.sleep(.1)
-        self.assertTrue(Path(record['output']).read_text().strip())
-        self.d.call(*self.d.reconcile_options(record))
-        before = self.prcomments.read_text()
-        refusal = self.call('fail', '--attempt', str(started['attempt']), '--reason',
-                            'Discard it.', ok=False)
-        self.assertIn('retained executor output', refusal)
-        self.assertIn('publish --attempt', refusal)
-        self.assertEqual(self.prcomments.read_text(), before)
-        # Publication is the disposition that reads a retained output, and the one that records
-        # this loss; `fail` never gets to decide that a real verdict was worth discarding.
-        released = self.call('publish', '--attempt', str(started['attempt']))
-        self.assertEqual(released['status'], 'failed')
-        self.assertIn('lost review execution reconciled', released['error'])
 
     def test_failing_an_unlaunched_reservation_requires_a_reason(self):
         self.reserve_without_run()
@@ -1181,92 +1191,6 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertEqual(json.loads(result.stdout)['next'], 'review')
 
-    def test_a_reservation_whose_executor_is_gone_is_reported_lost(self):
-        """#447: `state()` reported every reservation `awaiting-verdict`, whatever became of its
-        executor. #435 already stopped the merge guard refusing on one; nothing was waited for."""
-        self.reserve_without_run()
-        unlaunched = self.call('status')
-        self.assertEqual(unlaunched['next'], 'lost-reservation')
-        self.assertIn('fail --attempt', unlaunched['instruction'])
-
-        self.prcomments.write_text('[]')
-        self.env['FAKE_HOLD'] = str(self.root/'executor-release')
-        self.start()
-        record = self.d.await_run()
-        os.killpg(record['pid'], signal.SIGKILL)
-        time.sleep(.1)
-        killed = self.call('status')
-        self.assertEqual(killed['next'], 'lost-reservation')
-        self.assertIn('fail --attempt', killed['instruction'])
-        self.assertEqual(killed['rounds'], 0)
-
-    def test_a_tampered_lane_artifact_is_reported_lost_rather_than_refusing_status(self):
-        """#449: `live()` caught only `Refusal`, so the bare `OSError` a tampered lane artifact
-        raises — here a supervisor lock that is a directory, which its `O_RDWR | O_NOFOLLOW` open
-        rejects — escaped as a refusal of the whole `status` read, the one command whose job is to
-        show the orchestrator the reservation it has to recover."""
-        self.env['FAKE_HOLD'] = str(self.root/'executor-release')
-        self.start()
-        record = self.d.await_run()
-        os.killpg(record['pid'], signal.SIGKILL)
-        time.sleep(.1)
-        self.assertFalse(Path(record['completion']).exists())
-        # A directory still resolves to its own recorded name, so the artifact identity check
-        # passes and the open is what fails; a symlink loop is refused by that identity check
-        # itself, uniformly across interpreters, since #451.
-        lock = Path(record['supervisor_lock']); lock.unlink(); lock.mkdir()
-        status = self.call('status')
-        self.assertEqual((status['next'], status['rounds']), ('lost-reservation', 0))
-        # #451: reading every filesystem error as "no executor" is right for this tampered lock
-        # and wrong for a transient EIO or EACCES, and the reading is the same either way. The
-        # status output carries the errno text so the orchestrator can tell them apart.
-        self.assertEqual(len(status['liveness_errors']), 1)
-        self.assertIn(str(status['active'][0]['comment_id']), status['liveness_errors'][0])
-        self.assertIn('Is a directory', status['liveness_errors'][0])
-        self.assertIn(record['supervisor_lock'], status['liveness_errors'][0])
-        # The attempt carries a recorded run, so `fail` refuses it: name the command that works.
-        self.assertIn('publish --attempt', status['instruction'])
-        self.assertIn('fail --attempt', status['instruction'])
-        # Reporting the reservation never releases it: disposition still holds the line.
-        released = self.call('publish', '--attempt', str(status['active'][0]['comment_id']), ok=False)
-        self.assertIn('reconcil', released)
-
-    def test_a_reservation_with_a_live_executor_still_awaits_its_verdict(self):
-        self.env['FAKE_HOLD'] = str(self.root/'executor-release')
-        self.start()
-        record = self.d.await_run()
-        status = self.call('status')
-        self.assertEqual(status['next'], 'awaiting-verdict')
-        self.assertNotIn('instruction', status)
-        self.d.wait_completion(record)
-
-    def test_lost_review_requires_exact_issue_reconciliation_even_after_scratch_deletion(self):
-        self.env['FAKE_HOLD'] = str(self.root/'executor-release')
-        started = self.start()
-        record = self.d.await_run()
-        os.killpg(record['pid'],signal.SIGKILL)
-        time.sleep(.1)
-        # Partial model output exists, but without completion it cannot become a verdict.
-        self.assertTrue(Path(record['output']).read_text())
-        before = self.prcomments.read_text()
-        self.assertIn('reconcil',self.call('publish','--attempt',str(started['attempt']),ok=False))
-        self.assertEqual(self.prcomments.read_text(),before)
-        shutil.rmtree(Path(record['brief']).parent)
-        self.d.call(*self.d.reconcile_options(record))
-        result = self.call('publish','--attempt',str(started['attempt']))
-        self.assertEqual(result['status'],'failed')
-        rows = json.loads(self.prcomments.read_text())
-        self.assertEqual(len(rows),1)
-        self.assertIn('Origin host inspection',rows[0]['body'])
-        self.assertIn('issuecomment-99',rows[0]['body'])
-        self.assertNotIn('executor_exit',rows[0]['body'])
-        self.assertNotIn('### Goal verdict',rows[0]['body'])
-        self.assertFalse(Path(record['brief']).parent.exists())
-        self.assertEqual(self.call('status')['active'],[])
-        self.assertEqual(self.call('status')['rounds'],0)
-        before = self.prcomments.read_text()
-        self.call('publish','--attempt',str(started['attempt']))
-        self.assertEqual(self.prcomments.read_text(),before)
 
     def test_wait_publication_failure_retains_result_for_idempotent_retry(self):
         gh = self.d.bin/'gh'
@@ -1279,7 +1203,8 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
                           '--implementation','codex','--wait',ok=False)
         self.assertIn('fixture verdict publication failed',error)
         record = self.d.lane_records()[-1]
-        self.assertEqual(Path(record['completion']).read_text(),'0\n')
+        attempt = json.loads(json.loads(self.prcomments.read_text())[0]['body'].split('```json\n')[1].split('\n```')[0])
+        self.assertEqual(attempt['run']['executor_exit'], 0)
         self.assertEqual(Path(record['output']).read_text(),self.verdict.read_text())
         self.env.pop('REJECT_VERDICT')
         self.call('publish','--attempt','100')
@@ -1287,6 +1212,32 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.call('publish','--attempt','100')
         self.assertEqual(self.prcomments.read_text(),before)
         self.assertEqual(len(self.d.lane_records()),2)
+
+    def test_first_publication_failure_returns_observed_result_for_explicit_retry(self):
+        gh = self.d.bin / 'gh'
+        gh.write_text(gh.read_text().replace(
+            "row['body']=json.loads(Path(a[a.index('--input')+1]).read_text())['body'];write_comments(rows)",
+            "body=json.loads(Path(a[a.index('--input')+1]).read_text())['body']\n  if os.environ.get('REJECT_RETURN') and '\"status\": \"dispatched\"' in body: raise SystemExit('fixture return publication failed')\n  row['body']=body;write_comments(rows)"))
+        self.env['REJECT_RETURN'] = '1'
+        result = self.invoke('start', '--architecture-level', 'no', '--output', str(self.out))
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('fixture return publication failed', result.stderr)
+        self.assertTrue(result.stdout.strip(), 'start discarded its observed result')
+        captured = json.loads(result.stdout)
+        self.assertEqual(captured['run']['executor_exit'], 0)
+        returned = self.root / 'captured-start.json'
+        returned.write_text(json.dumps(dict(captured, attempt=999)))
+        before = self.prcomments.read_text()
+        self.assertIn('differs', self.call('publish', '--attempt', '100', '--dispatch-return', str(returned), ok=False))
+        self.assertEqual(self.prcomments.read_text(), before)
+        returned.write_text(result.stdout)
+        self.env.pop('REJECT_RETURN')
+        published = self.call('publish', '--attempt', '100', '--dispatch-return', str(returned))
+        self.assertEqual(published['status'], 'returned')
+        self.assertTrue(json.loads(self.prcomments.read_text())[0]['body'].endswith(self.verdict.read_text()))
+        before = self.prcomments.read_text()
+        self.call('publish', '--attempt', '100')
+        self.assertEqual(self.prcomments.read_text(), before)
 
     def test_start_dispatches_and_publishes_whole_verdict_once(self):
         result=self.start();comments=self.published()
@@ -1299,32 +1250,6 @@ while hold and not Path(hold).exists() and time.monotonic()<deadline: time.sleep
         self.call('publish','--attempt',str(result['attempt']))
         self.assertEqual(self.prcomments.read_text(),json.dumps(comments))
 
-    def test_detached_publication_survives_session_hangup(self):
-        self.d.without_detachment_tools()
-        release = self.root/'release'
-        self.env['FAKE_HOLD'] = str(release)
-        result = self.start()
-        # A second real return handler must also survive HUP and serialize publication.
-        # Its environment uniquely identifies its first GitHub read as readiness.
-        ready = self.root/'watch-ready'
-        env = dict(self.env, WATCH_READY=str(ready))
-        command = [sys.executable, str(self.script), '_watch', '13', '--issue', '12',
-                   '--project', str(self.project), '--attempt', str(result['attempt'])]
-        with subprocess.Popen(command, env=env, text=True, stdin=subprocess.DEVNULL,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              start_new_session=True) as observer:
-            try:
-                deadline = time.monotonic() + 8
-                while not ready.exists() and observer.poll() is None and time.monotonic() < deadline:
-                    time.sleep(.02)
-                self.assertTrue(ready.exists())
-                os.killpg(observer.pid, signal.SIGHUP)
-            finally:
-                release.touch()
-                stdout, stderr = observer.communicate(timeout=12)
-                self.published()
-            self.assertEqual(observer.returncode, 0, stdout + stderr)
-        self.assertEqual(self.call('status')['next'], 'accepted')
 
     def test_floor_failures_count_and_an_eighth_round_warns_instead_of_refusing(self):
         """#434: the count was never the stop signal; flat repeated findings are (#173)."""

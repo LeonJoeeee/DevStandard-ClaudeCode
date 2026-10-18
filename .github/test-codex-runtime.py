@@ -443,7 +443,7 @@ def run_case(binary, fixture, name, *, role, trusted=False, enabled=True, logs=N
         for key in ('DEVSTANDARD_ROLE', 'PLUGIN_DATA', 'CLAUDE_PLUGIN_DATA',
                     'PLUGIN_ROOT', 'CLAUDE_PLUGIN_ROOT', 'OPENAI_API_KEY'):
             env.pop(key, None)
-        env['DEVSTANDARD_ROLE'] = role  # set on the supervisor by the dispatcher, and inherited
+        env['DEVSTANDARD_ROLE'] = role  # set on the child by the dispatcher
         started = time.monotonic()
         result = subprocess.run(command, env=env, input=instructions,
                                 capture_output=True, text=True, timeout=45)
@@ -573,7 +573,7 @@ def dispatch_reviewer(binary, logs):
             require((lane / 'evidence.txt').read_text() == 'later evidence', 'review altered lane file')
             require(not Path(record['review_checkout']).parent.exists(), 'review copy survived completion')
             if logs:
-                for key in ('brief', 'output', 'log', 'completion'):
+                for key in ('brief', 'output', 'log'):
                     shutil.copy2(record[key], logs / ('dispatch-reviewer.' + Path(record[key]).name))
                 (logs / 'dispatch-reviewer.requests.json').write_text(json.dumps(fixture.requests, indent=2))
             return {'case': 'dispatch-reviewer', 'status': 'pass', 'pinned_head': pin,

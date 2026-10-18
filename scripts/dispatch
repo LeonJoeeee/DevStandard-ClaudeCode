@@ -3,7 +3,6 @@
 import argparse
 from contextlib import contextmanager, nullcontext
 import errno
-import fcntl
 import json
 import os
 from pathlib import Path
@@ -11,7 +10,6 @@ import re
 import shlex
 import shutil
 import signal
-import stat
 import subprocess
 import sys
 import tempfile
@@ -24,13 +22,6 @@ from hard_edges import (codex_hook_config, codex_helper_line, api, base_advanced
 
 MARKER = '<!-- devstandard-dispatch-v1 -->'
 NATIVE_IMPLEMENTATIONS = ('claude',)
-# A native handle the dispatcher never observes. `codex-native` is no longer offered (#459, ADR
-# 0063): Codex stopped hosting the method, and with it the receipt a Codex host forwarded to its
-# own spawn tool. A lane recorded before then may still carry such a run, and like a Claude Agent
-# handle it was the caller's own, so it is read the same way and never blocks its lane.
-NATIVE_RECORDS = NATIVE_IMPLEMENTATIONS + ('codex-native',)
-LEGACY_LOST_ATTESTATION = 'Authoritative inspection of the originating host/environment found no executor or supervisor owned by this exact run.'
-LOST_ATTESTATION = 'Caller attests that authoritative inspection of the originating host/environment found no executor or supervisor owned by this exact run; the dispatcher has not verified that inspection.'
 
 
 class Refusal(Exception):
@@ -283,137 +274,6 @@ def publish(project, repo, issue, record, scratch):
     return run('gh', 'issue', 'comment', str(issue), '--repo', repo, '--body-file', str(path), cwd=project)
 
 
-def artifact(record, key, name):
-    brief = Path(record.get('brief', ''))
-    require(brief.is_absolute() and brief.name == 'brief.txt', 'malformed run brief identity')
-    value = record.get(key)
-    if value is None:
-        return None  # Legacy/missing metadata is unknown, never inferred completion.
-    path = Path(value)
-    require(path == brief.parent / name and
-            resolved(path, key) == resolved(brief.parent, 'run scratch') / name,
-            f'malformed {key}: must name {name} in the exact run scratch')
-    return path
-
-
-def completion_exit(record):
-    path = artifact(record, 'completion', 'exit-code')
-    if path is None:
-        return None
-    try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except FileNotFoundError:
-        return None
-    with os.fdopen(fd) as stream:
-        require(stat.S_ISREG(os.fstat(stream.fileno()).st_mode), 'malformed completion marker')
-        text = stream.read(64)
-    require(re.fullmatch(r'-?\d+\n?', text) and -255 <= int(text) <= 255,
-            'malformed completion marker; preserve evidence and reconcile the run')
-    return int(text)
-
-
-def launch_failure(record):
-    """The supervisor's own record that it never created an executor, or None.
-
-    Written only where `child is None`, by the process holding the lock, so it reports something
-    no later inspection can: that no executor of this run ever existed. It is read exactly like
-    the completion marker and, unlike one, releases the attempt without claiming an exit (#454).
-
-    `alive` does not consult it and needs nothing from it: a released lock already answers
-    "nothing is running", and what this adds is the reason, which publication reports and lane
-    reuse does not ask for. Reuse keeps the operator's inspection it has always required.
-    """
-    path = artifact(record, 'launch_failure', 'launch-failure')
-    if path is None:
-        return None
-    try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except FileNotFoundError:
-        return None
-    with os.fdopen(fd) as stream:
-        require(stat.S_ISREG(os.fstat(stream.fileno()).st_mode), 'malformed launch failure record')
-        text = stream.read(4096).strip()
-    require(text, 'malformed launch failure record; preserve evidence and reconcile the run')
-    return text
-
-
-@contextmanager
-def supervisor_lock(record):
-    """Open only the recorded existing lock; a missing file has no serialization authority."""
-    path = artifact(record, 'supervisor_lock', 'supervisor.lock')
-    stream = None
-    if path is not None:
-        try:
-            fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
-        except FileNotFoundError:
-            pass
-        else:
-            stream = os.fdopen(fd, 'r+')
-    try:
-        if stream is not None:
-            require(stat.S_ISREG(os.fstat(stream.fileno()).st_mode), 'malformed supervisor lock')
-            try:
-                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                yield True
-                return
-        yield False
-    finally:
-        if stream is not None:
-            stream.close()
-
-
-def reconciled(record):
-    if record.get('status') != 'reconciled-lost':
-        return False
-    data = record.get('reconciliation', {})
-    require(data.get('ownership_attestation') in (LOST_ATTESTATION, LEGACY_LOST_ATTESTATION)
-            and data.get('reason') and data.get('evidence'),
-            'malformed lost-run reconciliation')
-    return True
-
-
-def alive(record):
-    require(record.get('implementation') in ('codex', 'claude-cli'), 'unknown executor implementation')
-    if reconciled(record) or completion_exit(record) is not None:
-        return False
-    with supervisor_lock(record) as held:
-        if completion_exit(record) is not None:
-            return False
-        require(held, 'recorded CLI execution lost or unknown; inspect the originating host and use --reconcile-lost')
-        return True
-
-
-def wait_process(process, record):
-    """Wait only on our own Popen; never signal a PID recovered from an issue receipt."""
-    def cancel(signum, frame):
-        # A reaped child no longer owns its numeric PID/group; it may already be reused.
-        if process.poll() is None:
-            try:
-                os.killpg(process.pid, signum)
-                process.wait(timeout=3)
-            except ProcessLookupError:
-                pass
-            except subprocess.TimeoutExpired:
-                if process.poll() is None:
-                    try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                process.wait(timeout=3)
-        raise Refusal('wait cancelled; inspect retained output and completion, or reconcile lost execution')
-
-    handlers = {sig: signal.signal(sig, cancel) for sig in (signal.SIGINT, signal.SIGTERM)}
-    try:
-        process.wait()
-        code = completion_exit(record)
-        require(code is not None, 'executor completion is lost or unknown; retained receipt requires reconciliation')
-        return code
-    finally:
-        for sig, handler in handlers.items():
-            signal.signal(sig, handler)
-
-
 def issue_comments(project, repo, issue):
     # gh issue view exposes GraphQL node IDs; only REST numeric IDs can PATCH comments.
     raw = run('gh', 'api', f'repos/{repo}/issues/{issue}/comments?per_page=100',
@@ -431,51 +291,6 @@ def issue_view(project, repo, issue):
                          '--json', 'number,title,url,body,state', cwd=project))
     data['comments'] = issue_comments(project, repo, issue)
     return data
-
-
-def exact_run(issue, brief):
-    history = records(issue['comments'])
-    lanes = [r for r in history if r.get('kind') == 'lane']
-    require(lanes, 'no current recorded lane')
-    lane = lanes[-1]
-    require(not any(r.get('status') == 'cleaned' and r.get('lane_id') == lane['lane_id'] for r in history),
-            'lane already cleaned')
-    matches = [(row, r) for row in issue['comments'] for r in records([row])
-               if r.get('kind') == 'run' and r.get('brief') == brief]
-    require(len(matches) == 1, 'reconciliation requires exactly one exact recorded run brief')
-    row, record = matches[0]
-    require(record.get('implementation') in ('codex', 'claude-cli'), 'reconciliation is only for CLI runs')
-    require(all(record.get(k) == lane.get(k) for k in
-                ('lane_id', 'issue', 'repo', 'branch', 'worktree', 'base', 'base_sha')),
-            'run differs from current recorded lane')
-    return row['id'], record, lane
-
-
-def reconcile_lost(args, project, repo, issue):
-    """Record the caller's lost-run finding on the exact run comment.
-
-    Two things here stop a second writer, and they are what this keeps: a supervisor still holding
-    the run's lock, and a completion marker present before or appearing during the reconciliation.
-    Re-comparing record fields, demanding a URL-shaped evidence string, or insisting on a
-    particular recorded status decided neither, so an operator's reading decides them now (#436).
-    """
-    _, original, lane = exact_run(issue, args.reconcile_lost)
-    lane_check(project, lane)
-    data = dict(reason=filled(args.reason, 'reconciliation reason'),
-                evidence=filled(args.evidence, 'reconciliation evidence'),
-                ownership_attestation=LOST_ATTESTATION)
-    with supervisor_lock(original) as held:
-        require(not held, 'recorded supervisor still running; reconciliation refused')
-        require(completion_exit(original) is None, 'valid completion exists; use normal completion handling')
-        cid, latest, _ = exact_run(issue_view(project, repo, args.issue), args.reconcile_lost)
-        require(completion_exit(latest) is None, 'completion appeared during reconciliation; use normal completion handling')
-        result = dict(latest, status='reconciled-lost', reconciliation=data)
-        body = MARKER + '\nLost execution reconciled; no executor exit or task acceptance is claimed.\n```json\n' + json.dumps(result, indent=2) + '\n```\n'
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as payload:
-            json.dump({'body':body},payload); payload.flush()
-            require(completion_exit(latest) is None, 'completion appeared during reconciliation; use normal completion handling')
-            run('gh','api',f'repos/{repo}/issues/comments/{cid}','--method','PATCH','--input',payload.name,cwd=project)
-        return result
 
 
 def lane_check(project, lane):
@@ -514,61 +329,39 @@ def reviewer_checkout(command):
             shutil.rmtree(root)
 
 
-def supervisor(scratch, lock_fd):
-    """Own the inherited lock until a real CLI return is atomically recorded."""
-    signal.signal(signal.SIGHUP, signal.SIG_IGN)
-    os.set_inheritable(lock_fd, False)  # The CLI cannot keep our ownership lock alive.
-    scratch = Path(scratch)
+def execute(command, log, purpose):
+    """Own and reap the CLI child; the caller's harness observes this process's exit."""
     child = None
-    cancelled = False
+    cancelled = None
 
     def cancel(signum, frame):
         nonlocal cancelled
-        cancelled = True
+        cancelled = signum
         if child is not None and child.poll() is None:
-            child.send_signal(signum)
+            try:
+                os.killpg(child.pid, signum)
+            except ProcessLookupError:
+                pass
 
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        signal.signal(sig, cancel)
+    handlers = {sig: signal.signal(sig, cancel) for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
-        deadline = time.monotonic() + 60
-        while not (scratch / 'launch').exists():
-            require(not cancelled and time.monotonic() < deadline,
-                    'lane publication did not complete; executor was not launched')
-            time.sleep(.05)
-        require(not cancelled, 'launch cancelled before executor start')
-        command = json.loads((scratch / 'command.json').read_text())
-        # Every CLI executor takes its prompt on stdin: a packet over Linux's 128 KiB
-        # single-argument limit died at exec while it rode argv (#454). `stdout` is optional;
-        # without it the child inherits this supervisor's, which is the lane's process log.
         with reviewer_checkout(command) if command.get('review_root') else nullcontext():
-            require(not cancelled, 'launch cancelled during reviewer checkout')
-            with open(command['stdin']) as stdin, \
-                    (open(command['stdout'], 'w') if command.get('stdout') else nullcontext()) as stdout:
-                child = subprocess.Popen(command['argv'], cwd=command['cwd'], stdin=stdin, stdout=stdout)
-            # A signal arriving during Popen must not leave the just-created child running.
-            if cancelled:
-                child.terminate()
-            code = child.wait()
-        # Completion means the reviewer copy has also been removed. Retain only lifecycle
-        # evidence in run scratch; a setup/cleanup error never falls back to the lane cwd.
-        tmp = scratch / 'exit-code.tmp'
-        tmp.write_text(str(code) + '\n')
-        tmp.replace(scratch / 'exit-code')
-        return code
-    except Exception as error:
-        print(f'dispatch supervisor: {error}', flush=True)
-        if child is None:
-            # Nothing was ever launched, and this process is the only one that can say so: it
-            # holds the lock and created no child. Recording that is not a completion marker —
-            # it is the opposite, and it is what lets a caller tell an executor that crashed
-            # from one that never started (#454).
-            tmp = scratch / 'launch-failure.tmp'
-            tmp.write_text(str(error) + '\n')
-            tmp.replace(scratch / 'launch-failure')
-        return 125  # No observed child return means no fabricated completion marker.
+            require(not cancelled, 'dispatch cancelled before executor start')
+            with open(command['stdin']) as stdin, log.open('w') as stream, \
+                    (open(command['stdout'], 'w') if command.get('stdout') else nullcontext(stream)) as stdout:
+                try:
+                    child = subprocess.Popen(command['argv'], cwd=command['cwd'], stdin=stdin,
+                        stdout=stdout, stderr=stream, start_new_session=True,
+                        env=dict(os.environ, DEVSTANDARD_ROLE=purpose))
+                except OSError as error:
+                    raise Refusal(f'executor never started: {error}') from error
+                # A signal during Popen must reach the just-created child too.
+                if cancelled:
+                    cancel(cancelled, None)
+                return child.wait()
     finally:
-        os.close(lock_fd)
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
 
 
 DISPATCH_EPILOG = """LANE AND EXECUTOR CONTRACT (the caller-facing detail reference/orchestrator.md
@@ -577,8 +370,8 @@ points here for; that page keeps the decision and the command line).
   Flags. --project selects another target checkout. --adopt records an already matching --branch
   and --worktree without launching or creating one. --pr must name the lane's branch; without it
   a continuation takes the branch's single open PR, and reports a closed or ambiguous one in the
-  run record rather than refusing. An existing inactive lane warns and reuses its branch/worktree;
-  a cleaned lane refuses, and a live or unknown CLI execution still blocks reuse. A new lane's
+  run record rather than refusing. An existing lane warns and reuses its branch/worktree;
+  a cleaned lane refuses. The caller owns one executor at a time per lane. A new lane's
   base accepts a named ref or full commit pin, never implicit HEAD or a flag form.
 
   Continuation admission. Ordinary goal/evidence fixes need no prior ruling; the next review's
@@ -595,22 +388,12 @@ points here for; that page keeps the decision and the command line).
   changes, accessible evidence, the current role source, and every non-dispatch issue comment in
   order.
 
-  CLI run state. This is the only liveness the dispatcher observes: a native handle is the
-  caller's, and the handle recorded on the issue is its evidence. The supervisor's atomic
-  completion marker at the run record's completion file path (exit-code) establishes an observed
-  exit; its launch_failure file path (launch-failure) records that the executor never started.
-  PIDs are diagnostic; a held supervisor_lock means running; an absent marker with a free or
-  missing lock means lost or unknown, never done.
-  Retain the run directory, brief identity, lock, output, log and marker through lane cleanup.
-  Process exit and prose claims establish neither the PR nor its evidence -- read the output.
-
-  --reconcile-lost preconditions. Originating-host inspection proving that this exact supervisor
-  and executor stopped, plus --reason and --evidence, recorded verbatim, carrying that inspection
-  and its result where they stay readable. It resolves one CLI run without inventing an exit or
-  output; where inspection is unavailable, remain blocked. What the dispatcher itself still
-  refuses is a held supervisor lock or a completion marker, before or during reconciliation: a
-  live or uncertain executor never permits a second writer or cleanup. Re-running it overwrites
-  the same comment, so state the finding you want recorded.
+  CLI execution. --wait is required for Codex and Claude CLI dispatch. Run this command as a
+  harness background task: dispatch owns the executor child, waits for its exit and returns the
+  observed status (128 + signal number for a signal death). The harness notifies on task exit;
+  read the returned JSON's executor_exit and the output/log paths, then report. Retain the run
+  directory, brief, output and log through lane cleanup. Process exit is not task acceptance.
+  Claude Code session death abandons the run.
 
   Native receipts. --implementation claude prepares agent-spawn.json, the Agent-tool instruction:
   subagent type, model, effort and the complete prompt. The caller passes it to the Agent tool,
@@ -638,31 +421,22 @@ def main():
     parser.add_argument('--adopt', action='store_true', help='record an existing --branch and --worktree with --base; does not launch')
     parser.add_argument('--pr', type=int, help="existing lane PR on the lane's branch (required for merged cleanup)")
     parser.add_argument('--resume', help='native Claude Agent handle to resume; reviewers are always fresh')
-    parser.add_argument('--reconcile-lost', help='exact recorded brief path; attest authoritative absence of all owned processes')
-    parser.add_argument('--reason', help='reason for explicit lost-run reconciliation')
-    parser.add_argument('--evidence', help='where the originating-host ownership and absence inspection is readable; recorded verbatim')
-    parser.add_argument('--wait', action='store_true', help='CLI only: retain this invocation through observed executor completion')
+    parser.add_argument('--wait', action='store_true', help='required for CLI dispatch: wait for and return the executor result')
     parser.add_argument('--cleanup', action='store_true')
     parser.add_argument('--discard', action='store_true', help='explicit caller instruction to discard this lane instead of merge')
     args = parser.parse_args()
     require(args.issue > 0, 'issue must be positive')
-    require(not args.wait or (args.implementation in ('codex', 'claude-cli')
-            and not any((args.adopt, args.cleanup, args.reconcile_lost))), '--wait requires CLI dispatch, not native or maintenance actions')
-    require(not args.reconcile_lost or not any((args.purpose, args.implementation, args.base, args.branch,
-            args.worktree, args.packet, args.brief, args.continuing, args.adopt, args.pr, args.resume,
-            args.cleanup, args.discard, args.wait, args.model, args.effort)),
-            '--reconcile-lost is a standalone maintenance action')
+    implementation = args.implementation or 'codex'
+    require(not args.wait or (implementation in ('codex', 'claude-cli')
+            and not any((args.adopt, args.cleanup))), '--wait requires CLI dispatch, not native or maintenance actions')
+    require(args.adopt or args.cleanup or implementation in NATIVE_IMPLEMENTATIONS or args.wait,
+            'CLI dispatch requires --wait; run it as a harness background task')
     require(not (args.model is not None or args.effort is not None) or not any(
-            (args.adopt, args.cleanup, args.reconcile_lost)), '--model and --effort require executor dispatch')
-    require(args.reconcile_lost or not (args.reason or args.evidence), '--reason and --evidence require --reconcile-lost')
+            (args.adopt, args.cleanup)), '--model and --effort require executor dispatch')
     project = resolved(args.project, 'project')
     require(same_path(git(project, 'rev-parse', '--show-toplevel'), project), '--project must be a checkout root')
     repo = run('gh', 'repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner', cwd=project)
     issue = issue_view(project, repo, args.issue)
-    if args.reconcile_lost:
-        issue['comments'] = issue_comments(project, repo, args.issue)
-        print(json.dumps(reconcile_lost(args, project, repo, issue), indent=2))
-        return
     # The reviewer's contract slots are filled from these sections, so the parse IS their
     # validation. A worker's packet carries the issue body verbatim and reads no section, so the
     # same parse only refused lanes over their prose (#427).
@@ -693,15 +467,6 @@ def main():
             require(value is None or (same_path(value, lane[key]) if key == 'worktree' else value == lane[key]),
                     f'{key} differs from recorded lane')
         lane_check(project, lane)
-        runs = [r for r in history if r.get('kind') == 'run' and r.get('lane_id') == lane['lane_id']]
-        for previous in runs:
-            # A native handle is the caller's own: nothing here can observe it, so the
-            # orchestrator's record on the issue is its evidence and an attestation flag would
-            # only restate it (#427). The CLI check below is the one that keeps a second writer
-            # off a running lane.
-            if previous.get('implementation') in NATIVE_RECORDS:
-                continue
-            require(not alive(previous), 'recorded executor still running; wait for completion')
     else:
         base = filled(args.base, 'base')
         require(not re.match(r'^(?:HEAD|@)(?:$|[~^:@{])', base) and not base.startswith('-'),
@@ -909,7 +674,7 @@ def main():
         publish(project, repo, args.issue, record, scratch)
     else:
         output = scratch / ('output.jsonl' if implementation == 'claude-cli' else 'output.txt')
-        log, completion, failure = [scratch / name for name in ('process.log', 'exit-code', 'launch-failure')]
+        log = scratch / 'process.log'
         if implementation == 'claude-cli':
             command = dict(argv=[shutil.which('claude'), '--print', '--plugin-dir', str(ROOT),
                 '--agent', f'devstandard:{args.purpose}', '--permission-mode', 'acceptEdits', '--permission-prompts', 'none',
@@ -953,34 +718,19 @@ def main():
                                       'review upstream'))
             command.update(review_root=str(review_root), review_source=str(wt), review_head=review_head,
                            review_origin=origin)
-        (scratch / 'command.json').write_text(json.dumps(command))
-        lock = scratch / 'supervisor.lock'
-        with lock.open('x+') as ownership, open(os.devnull) as stdin, log.open('w') as stdout:
-            fcntl.flock(ownership, fcntl.LOCK_EX)
-            process = subprocess.Popen([sys.executable, str(SELF),
-                                        '--supervise', str(scratch), str(ownership.fileno())], cwd=scratch, stdin=stdin,
-                                       pass_fds=(ownership.fileno(),),
-                                       stdout=stdout, stderr=subprocess.STDOUT, start_new_session=True,
-                                       env=dict(os.environ, DEVSTANDARD_ROLE=args.purpose))
-        record.update(status='launched', pid=process.pid, output=str(output), log=str(log),
-                      completion=str(completion), launch_failure=str(failure), supervisor_lock=str(lock))
-        try:
-            publish(project, repo, args.issue, record, scratch)
-        except Exception:
-            process.terminate()  # The CLI has not passed the publication gate.
-            process.wait()
-            raise
-        (scratch / 'launch').touch()
-        if args.wait:
-            record['executor_exit'] = wait_process(process, record)
+        record.update(status='launched', pid=os.getpid(), output=str(output), log=str(log))
+        # Publish the binding before the child starts: a worker recovers its packet from this run.
+        publish(project, repo, args.issue, record, scratch)
+        record['executor_exit'] = execute(command, log, args.purpose)
     print(json.dumps(record, indent=2))
+    code = record.get('executor_exit', 0)
+    return code if code >= 0 else 128 - code
+
 
 
 if __name__ == '__main__':
-    if len(sys.argv) == 4 and sys.argv[1] == '--supervise':
-        sys.exit(supervisor(sys.argv[2], int(sys.argv[3])))
     try:
-        main()
+        sys.exit(main())
     except (Refusal, GuardRefusal, OSError, ValueError) as error:
         print(f'dispatch refused: {error}', file=sys.stderr)
         sys.exit(2)
